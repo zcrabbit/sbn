@@ -31,4 +31,4 @@ When `emp_tree_freq` is provided, one can evaluate the kl divergence
 sbn_kl_div = model.kl_div(method='bn')['bn']
 ```
 
-See more examples in the jupyter notebooks.
+See more examples in the [jupyter notebooks](https://github.com/zcrabbit/sbn/tree/master/experiments).
