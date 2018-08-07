@@ -7,27 +7,13 @@ from collections import defaultdict
 EPS = np.finfo(float).eps
 
 
-# simplex projection
-# def proj_simplex(v, s=1.0):
-# #     v = np.array(v)
-#     n, = v.shape
-#
-#     if v.sum() == s and np.alltrue(v >= 0):
-#         return v
-#     u = np.sort(v)[::-1]
-#     cssv = np.cumsum(u)
-#     rho = np.nonzero(u*np.arange(1,n+1) > (cssv-s))[0][-1]
-#     theta = (cssv[rho] - s)/(rho + 1.0)
-#     w = (v - theta).clip(min=0)
-#     return w
-
 # generate full tree space    
 def generate(taxa):
     if len(taxa)==3:
-        return [pinf.Tree('('+','.join(taxa)+');')]
+        return [Tree('('+','.join(taxa)+');')]
     else:
         res = []
-        sister = pinf.Tree('('+taxa[-1]+');')
+        sister = Tree('('+taxa[-1]+');')
         for tree in generate(taxa[:-1]):
             for node in tree.traverse('preorder'):
                 if not node.is_root():

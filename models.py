@@ -64,7 +64,7 @@ class SBN:
             else:
                 print '{}|{}:{:.12f}|{:.12f}'.format(parent_clade_bitarr.to01(), bipart_bitarr.to01(), sum(self.clade_double_bipart_dict[key].values()), self.clade_dict[bipart_bitarr.to01()])
                
-        
+    # Dirichlet conjugate prior    
     def logprior(self):
         return self.alpha*sum([self.clade_freq_est[key]*np.log((self.clade_dict[key]+self.alpha*self.clade_freq_est[key])/(1.0+self.alpha)) for key in self.clade_dict])+sum([self.alpha*self.clade_bipart_freq_est[self._merge_bitarr(key).to01()][self._decomp_minor_bitarr(key).to01()]/len(self.clade_double_bipart_dict[key])*np.sum(np.log((np.array(self.clade_double_bipart_dict[key].values())+self.alpha*self.clade_bipart_freq_est[self._merge_bitarr(key).to01()][self._decomp_minor_bitarr(key).to01()]/len(self.clade_double_bipart_dict[key]))/(self.alpha*self.clade_bipart_freq_est[self._merge_bitarr(key).to01()][self._decomp_minor_bitarr(key).to01()]+self.clade_bipart_dict[self._merge_bitarr(key).to01()][self._decomp_minor_bitarr(key).to01()])))
                         if self._merge_bitarr(key).to01() != '1'*self.ntaxa else self.alpha*self.clade_freq_est[self._minor_bitarr(bitarray(key[:self.ntaxa])).to01()]/len(self.clade_double_bipart_dict[key])*np.sum(np.log((np.array(self.clade_double_bipart_dict[key].values())+self.alpha*self.clade_freq_est[self._minor_bitarr(bitarray(key[:self.ntaxa])).to01()]/len(self.clade_double_bipart_dict[key]))/(self.alpha*self.clade_freq_est[self._minor_bitarr(bitarray(key[:self.ntaxa])).to01()]+self.clade_dict[self._minor_bitarr(bitarray(key[:self.ntaxa])).to01()])))
@@ -78,7 +78,6 @@ class SBN:
                 clade = node.get_leaf_names()
                 node_bitarr = self.clade_to_bitarr(clade)
                 self.clade_dict[self._minor_bitarr(node_bitarr).to01()] += wts / (2*self.ntaxa-3.0)
-                # self.clade_dict[(~node_bitarr).to01()] += wts
                 nodetobitMap[node] = node_bitarr
         
         return nodetobitMap
@@ -86,7 +85,6 @@ class SBN:
         
     def ccd_dict_update(self, tree, wts):
         nodetobitMap = self.clade_update(tree, wts)
-
         for node in tree.traverse('levelorder'):
             if not node.is_root():
                 if not node.is_leaf():
