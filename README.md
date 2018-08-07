@@ -22,3 +22,13 @@ logp = model.bn_em_prob(tree_dict, tree_names, tree_wts, maxiter=200, abstol=1e-
 
 ```
 
+Once trained, one can compute the sbn probablities of trees
+```
+sbn_est_prob = model.bn_estimate(tree)
+```
+When `emp_tree_freq` is provided, one can evaluate the kl divergence
+```
+sbn_kl_div = model.kl_div(method='bn')['bn']
+```
+
+See more examples in the jupyter notebooks.
