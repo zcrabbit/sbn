@@ -137,7 +137,7 @@ class SBN:
     def ccd_train_count(self, tree_count, tree_id):
         self.clade_dict = defaultdict(float)
         self.clade_bipart_dict = defaultdict(lambda: defaultdict(float))
-        total_count = sum(tree_count.values())
+        total_count = sum(tree_count.values()) * 1.0
         for key in tree_count:
             count = tree_count[key]
             tree = tree_id[key][0]
