@@ -299,7 +299,7 @@ class SBN:
         
     
     def bn_em_count(self, tree_count, tree_id, maxiter=100, miniter=50, abstol=1e-04, monitor=False, MAP=False):
-        self.bn_train_count(tree_count, tree_id)           
+        self.bn_train_count(tree_count, tree_id)
         total_count = sum(tree_count.values()) * 1.0
         logp = []
         
