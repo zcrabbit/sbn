@@ -4,6 +4,16 @@ Generalizing Phylogenetic Posterior Estimator from MCMC samples via [subsplit Ba
 Please consider citing the paper when any of the material is used for your research.
 
 ## Basis Usage
+
+Load MCMC sample
+```python
+from utils import summary, mcmc_treeprob
+# for golden runs
+tree_dict_total, tree_names_total, tree_wts_total = summary(dataname, data_directory)
+# for sample runs
+tree_dict, tree_names, tree_wts = mcmc_treeprob(path_to_data, 'nexus')
+```
+
 ```python
 from models import SBN
 
