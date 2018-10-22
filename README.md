@@ -14,6 +14,7 @@ tree_dict_total, tree_names_total, tree_wts_total = summary(dataname, data_direc
 tree_dict, tree_names, tree_wts = mcmc_treeprob(path_to_data, 'nexus')
 ```
 
+Run SBN
 ```python
 from models import SBN
 
@@ -43,4 +44,4 @@ When `emp_tree_freq` is provided, one can evaluate the kl divergence
 sbn_kl_div = model.kl_div(method='bn')['bn']
 ```
 
-See more examples in the [jupyter notebooks](https://github.com/zcrabbit/sbn/tree/master/experiments).
+See more detailed examples in the [jupyter notebooks](https://github.com/zcrabbit/sbn/tree/master/experiments).
