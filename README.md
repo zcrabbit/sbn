@@ -3,7 +3,14 @@ Generalizing Phylogenetic Posterior Estimator from MCMC samples via [subsplit Ba
 
 Please consider citing the paper when any of the material is used for your research.
 
-## Basis Usage
+## Dependencies
+
+* [ete3](http://etetoolkit.org)
+* [Bio](http://biopython.org)
+* [bitarray](https://pypi.org/project/bitarray/)
+
+
+## Basic Usage
 
 Load MCMC sample
 ```python
