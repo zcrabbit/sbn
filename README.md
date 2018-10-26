@@ -1,5 +1,6 @@
-# SBN
-Generalizing Phylogenetic Posterior Estimator from MCMC samples via [subsplit Bayesian networks](https://arxiv.org/pdf/1805.07834.pdf).
+# Subsplit Bayesian Networks for Generalizing Phylogenetic Posterior Estimation
+Thank you for your interest in our paper:
+[Generalizing Tree Probability Estimation via Subsplit Bayesian Networks](https://arxiv.org/pdf/1805.07834.pdf).
 
 Please consider citing the paper when any of the material is used for your research.
 
