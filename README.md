@@ -6,7 +6,7 @@ Please consider citing the paper when any of the material is used for your resea
 ## Dependencies
 
 * [ete3](http://etetoolkit.org)
-* [Bio](http://biopython.org)
+* [Biopython](http://biopython.org)
 * [bitarray](https://pypi.org/project/bitarray/)
 
 
