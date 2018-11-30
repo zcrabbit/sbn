@@ -3,6 +3,18 @@ Thank you for your interest in our paper:
 [Generalizing Tree Probability Estimation via Bayesian Networks](https://arxiv.org/pdf/1805.07834.pdf).
 
 Please consider citing the paper when any of the material is used for your research.
+```
+@incollection{NIPS2018_7418,
+title = {Generalizing Tree Probability Estimation via Bayesian Networks},
+author = {Zhang, Cheng and Matsen IV, Frederick A},
+booktitle = {Advances in Neural Information Processing Systems 31},
+editor = {S. Bengio and H. Wallach and H. Larochelle and K. Grauman and N. Cesa-Bianchi and R. Garnett},
+pages = {1449--1458},
+year = {2018},
+publisher = {Curran Associates, Inc.},
+url = {http://papers.nips.cc/paper/7418-generalizing-tree-probability-estimation-via-bayesian-networks.pdf}
+}
+```
 
 ## Dependencies
 
