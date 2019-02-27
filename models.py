@@ -365,7 +365,7 @@ class SBN:
                         child_bitarr = self.clade_to_bitarr(child.get_leaf_names())
                         nodetobitMap[child] = child_bitarr
                     bipart_bitarr = min([nodetobitMap[child] for child in node.children])
-                    ccd_est *= self.clade_dict[bitpart_bitarr.to01()]
+                    ccd_est *= self.clade_dict[bipart_bitarr.to01()]
             elif not node.is_leaf():
                 for child in node.children:
                     child_bitarr = self.clade_to_bitarr(child.get_leaf_names())
