@@ -7,13 +7,18 @@ EPS = np.finfo(float).eps
 
 
 class SBN:
-    def __init__(self, taxa, emp_tree_freq={}, alpha=0.0):
+    def __init__(self, taxa, emp_tree_freq=None, alpha=0.0):
         self.taxa = taxa
         self.ntaxa = len(taxa)
         self.map = {taxon: i for i, taxon in enumerate(taxa)}
         self.alpha = alpha
-        self.emp_tree_freq = emp_tree_freq
-        self.negDataEnt = np.sum([wts * np.log(wts + EPS) for wts in emp_tree_freq.values()])
+
+        if emp_tree_freq is None:
+            self.emp_tree_freq = {}
+        else:
+            self.emp_tree_freq = emp_tree_freq
+        self.negDataEnt = np.sum([wts * np.log(wts + EPS) for wts in self.emp_tree_freq.values()])
+
         self.samp_tree_freq = defaultdict(float)
         self.clade_dict = defaultdict(float)
         self.clade_bipart_dict = defaultdict(lambda: defaultdict(float))
