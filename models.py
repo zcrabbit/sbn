@@ -40,8 +40,8 @@ class SBN:
 
     def clade_to_bitarr(self, clade):
         bit_list = ['0'] * self.ntaxa
-        for i in clade:
-            bit_list[self.map[i]] = '1'
+        for taxon in clade:
+            bit_list[self.map[taxon]] = '1'
         return bitarray(''.join(bit_list))
 
     def check_clade_dict(self):
