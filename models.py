@@ -7,7 +7,7 @@ EPS = np.finfo(float).eps
 
 
 class SBN:
-    def __init__(self, taxa, emp_tree_freq=None, alpha=0.0):
+    def __init__(self, taxa, emp_tree_freq={}, alpha=0.0):
         self.taxa = taxa
         self.ntaxa = len(taxa)
         self.map = {taxon: i for i, taxon in enumerate(taxa)}
