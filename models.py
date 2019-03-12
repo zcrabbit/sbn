@@ -118,35 +118,81 @@ class SBN:
         return nodetobitMap
 
     def bn_dict_update(self, tree, wts, root_wts=None):
+        """Updates the conditional probability distribution (CPD)
+        dictionary, based on a single tree topology, weighted by the
+        number of times that tree appears in the greater sample.
+
+        Parameters
+        ----------
+        tree : tree
+            Unrooted tree object providing the topology.
+
+        wts : float
+            Weight representing the fraction of the sampled trees that
+            this tree topology represents.
+
+        root_wts : dict, optional
+            Dictionary mapping node bit signatures to edge weights.
+            Used for SBN-EM and SBN-EM-alpha.
+        """
+
         nodetobitMap = self.ccd_dict_update(tree, wts)
         for node in tree.traverse('levelorder'):
             if not root_wts:
+                # Simple averaging weighting, used in SBN-SA
                 node_wts = wts / (2 * self.ntaxa - 3.0)
             else:
+                # Weighted edges, used in SBN-EM and SBN-EM-alpha
                 node_wts = wts * root_wts[nodetobitMap[node].to01()]
 
+            # Updates the conditional probability distribution (CPD)
+            # weights.
+            # Notation: Node and the edge 'above' it are equivalent.
+            # Explores the six orientations that this (node, node.up)
+            # pair can take, and updates the CPD dictionaries.
             if not node.is_root():
+                # Orientations 1,2,3: node is child subsplit, node.up
+                # is in the direction of the root subsplit.
                 if not node.is_leaf():
+                    # Given nodetobitMap[node], this well-defines
+                    # the subsplit at node
                     bipart_bitarr = min([nodetobitMap[child] for child in node.children])
                     for sister in node.get_sisters():
+                        # Orientation 1
+                        # If root subsplit is beyond node.up, this
+                        # well-defines the parent subsplit at node.up.
                         comb_parent_bipart_bitarr = nodetobitMap[sister] + nodetobitMap[node]
                         self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] += node_wts
                     if not node.up.is_root():
+                        # Orientation 2
+                        # If root subsplit is linked via a sister, this
+                        # well-defines the parent subsplit at node.up.
                         comb_parent_bipart_bitarr = ~nodetobitMap[node.up] + nodetobitMap[node]
                         self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] += node_wts
 
+                    # Orientation 3
+                    # If root subsplit is on the edge between node and
+                    # node.up, this well-defines the root split.
                     comb_parent_bipart_bitarr = ~nodetobitMap[node] + nodetobitMap[node]
                     self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] += node_wts
 
+                # Orientations 4,5,6: node.up is child subsplit, node
+                # is in the direction of the root subsplit.
                 if not node.up.is_root():
                     bipart_bitarr = min([nodetobitMap[sister] for sister in node.get_sisters()] + [~nodetobitMap[node.up]])
                 else:
                     bipart_bitarr = min([nodetobitMap[sister] for sister in node.get_sisters()])
                 if not node.is_leaf():
+                    # Orientations 4 and 5
+                    # If root subsplit is beyond node's children, this
+                    # well-defines the parent subsplit at node.
                     for child in node.children:
                         comb_parent_bipart_bitarr = nodetobitMap[child] + ~nodetobitMap[node]
                         self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] += node_wts
 
+                # Orientation 6
+                # If root subsplit is on the edge between node.up and
+                # node, this well-defines the root split.
                 comb_parent_bipart_bitarr = nodetobitMap[node] + ~nodetobitMap[node]
                 self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] += node_wts
 
@@ -171,10 +217,25 @@ class SBN:
             self.ccd_dict_update(tree, wts)
 
     def bn_train_count(self, tree_count, tree_id):
+        """Train an SBN on tree count data.
+
+        Parameters
+        ----------
+        tree_count : dict
+            Dictionary mapping tree topology ID to count of that tree
+            in the sample.
+        tree_id : dict
+            Dictionary mapping tree topology ID to a singleton list
+            containing the tree object.
+        """
+
+        # Clear the SBN model dictionaries
         self.clade_dict = defaultdict(float)
         self.clade_bipart_dict = defaultdict(lambda: defaultdict(float))
         self.clade_double_bipart_dict = defaultdict(lambda: defaultdict(float))
         total_count = sum(tree_count.values()) * 1.0
+
+        # Iterate over the trees and update the model dictionaries, weighted by tree count.
         for key in tree_count:
             count = tree_count[key]
             tree = tree_id[key][0]
