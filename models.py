@@ -91,8 +91,25 @@ class SBN:
         ])
 
     def clade_update(self, tree, wts):
+        """Updates clade distribution.
+
+        Updates the clade dictionary, based on a single tree topology,
+        weighted by the number of times that tree appears in the
+        greater sample.
+
+        Parameters
+        ----------
+        tree : tree
+            Unrooted tree object providing the topology.
+
+        wts : float
+            Weight representing the fraction of the sampled trees that
+            this tree topology represents.
+        """
         nodetobitMap = {}
         for node in tree.traverse('levelorder'):
+            # NB: tree topology is unrooted, but is stored in a
+            # rooted tree format (with a trifurcating root).
             if not node.is_root():
                 clade = node.get_leaf_names()
                 node_bitarr = self.clade_to_bitarr(clade)
@@ -102,25 +119,56 @@ class SBN:
         return nodetobitMap
 
     def ccd_dict_update(self, tree, wts):
+        """Updates conditional clade distribution (CCD).
+
+        Updates the CCD dictionary, based on a single tree topology,
+        weighted by the number of times that tree appears in the
+        greater sample.
+
+        Parameters
+        ----------
+        tree : tree
+            Unrooted tree object providing the topology.
+
+        wts : float
+            Weight representing the fraction of the sampled trees that
+            this tree topology represents.
+        """
+
         nodetobitMap = self.clade_update(tree, wts)
         for node in tree.traverse('levelorder'):
+            # Updates the conditional clade distribution (CCD)
+            # weights.
+            # Notation: Node and the edge 'above' it are equivalent.
+            # Explores the two orientations of subsplit that this node
+            # can take, and updates the CCD dictionary.
             if not node.is_root():
+                # Orientation 1
+                # Root node is 'above' node, so node's subsplit
+                # splits its 'child' clades.
                 if not node.is_leaf():
                     bipart_bitarr = min([nodetobitMap[child] for child in node.children])
                     self.clade_bipart_dict[nodetobitMap[node].to01()][bipart_bitarr.to01()] += wts / (2 * self.ntaxa - 3.0)
+
+                # Orientation 2
+                # Root node is 'below' node, so node's subsplit
+                # splits its 'sister' and/or 'parent' clades.
+                # NB: tree topology is unrooted, but is stored in a
+                # rooted tree format (with a trifurcating root).
                 if not node.up.is_root():
                     bipart_bitarr = min([nodetobitMap[sister] for sister in node.get_sisters()] + [~nodetobitMap[node.up]])
                 else:
                     bipart_bitarr = min([nodetobitMap[sister] for sister in node.get_sisters()])
-
                 self.clade_bipart_dict[(~nodetobitMap[node]).to01()][bipart_bitarr.to01()] += wts / (2 * self.ntaxa - 3.0)
 
         return nodetobitMap
 
     def bn_dict_update(self, tree, wts, root_wts=None):
-        """Updates the conditional probability distribution (CPD)
-        dictionary, based on a single tree topology, weighted by the
-        number of times that tree appears in the greater sample.
+        """Updates conditional probability distribution (CPD).
+
+        Updates the CPD dictionary, based on a single tree topology,
+        weighted by the number of times that tree appears in the
+        greater sample.
 
         Parameters
         ----------
