@@ -458,6 +458,7 @@ class SBN:
         self.clade_dict, self.clade_bipart_dict, self.clade_double_bipart_dict = deepcopy(clade_dict), deepcopy(clade_bipart_dict), deepcopy(
             clade_double_bipart_dict)
 
+    # TODO: Maybe switch to log-addition instead of linear-multiplication
     def ccd_estimate(self, tree, unrooted=True):
         ccd_est = 1.0
         nodetobitMap = {}
@@ -486,6 +487,10 @@ class SBN:
                     nodetobitMap[child] = child_bitarr
 
                 bipart_bitarr = min([nodetobitMap[child] for child in node.children])
+                # Notes for log-conversion:
+                # np.exp(-745) == 0.0 -> False
+                # np.exp(-746) == 0.0 -> True
+                # Consider moving this check to the end of the loop body.
                 if ccd_est == 0.0: break
                 ccd_est *= self.clade_bipart_dict[nodetobitMap[node].to01()][bipart_bitarr.to01()] / self.clade_dict[self._minor_bitarr(
                     nodetobitMap[node]).to01()]
@@ -532,6 +537,8 @@ class SBN:
 
         return bn_est
 
+    # TODO: Maybe switch to log-addition instead of linear-multiplication
+    # Regularization linear-addition might present an obstacle
     def _bn_estimate_fast(self, tree, MAP=False):
         cbn_est_up = {node: 1.0 for node in tree.traverse('postorder') if not node.is_root()}
         Up = {node: 1.0 for node in tree.traverse('postorder') if not node.is_root()}
