@@ -17,11 +17,21 @@ class SBN:
             self.emp_tree_freq = {}
         else:
             self.emp_tree_freq = emp_tree_freq
+
+        # TODO: consider having this be calculated on the fly, in case emp_tree_freq is silently altered.
         self.negDataEnt = np.sum([wts * np.log(wts + EPS) for wts in self.emp_tree_freq.values()])
 
         self.samp_tree_freq = defaultdict(float)
+
+        # Dictionary containing root split probabilities
         self.clade_dict = defaultdict(float)
+
+        # Dictionary mostly containing joint parent clade-child subsplit data
+        # Used to calculate Pr(child subsplit | parent clade) = CCD probs.
         self.clade_bipart_dict = defaultdict(lambda: defaultdict(float))
+
+        # Dictionary mostly containing
+        # Used to calculate Pr(child subsplit | parent subsplit) = CPD probs.
         self.clade_double_bipart_dict = defaultdict(lambda: defaultdict(float))
 
         self.clade_freq_est = defaultdict(float)
@@ -497,6 +507,7 @@ class SBN:
 
         return (2 * self.ntaxa - 3.0) * ccd_est
 
+    # TODO: Maybe switch to log-addition instead of linear-multiplication
     def bn_estimate_rooted(self, tree, MAP=False):
         bn_est = 1.0
         nodetobitMap = {}
@@ -514,7 +525,8 @@ class SBN:
                     nodetobitMap[child] = child_bitarr
 
                 bipart_bitarr = min([nodetobitMap[child] for child in node.children])
-                if bn_est == 0.0: break
+                if bn_est == 0.0:
+                    break
                 parent_bipart_bitarr = min([nodetobitMap[node.get_sisters()[0]], nodetobitMap[node]])
                 comb_parent_bipart_bitarr = nodetobitMap[node.get_sisters()[0]] + nodetobitMap[node]
                 if node.up.is_root():
@@ -527,6 +539,7 @@ class SBN:
                 if (normalizing_const + MAP * self.alpha * normalizing_const_est) == 0.0:
                     bn_est = 0.0
                     break
+
                 if self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] > 0:
                     bn_est *= (self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] +
                                MAP * self.alpha * normalizing_const_est / self.clade_double_bipart_len[comb_parent_bipart_bitarr.to01()]) / (
@@ -540,20 +553,36 @@ class SBN:
     # TODO: Maybe switch to log-addition instead of linear-multiplication
     # Regularization linear-addition might present an obstacle
     def _bn_estimate_fast(self, tree, MAP=False):
+        """Two-pass algorithm for calculating likelihood on an edge by edge basis."""
+
+        # cbn_est_up[node] contains the probability of the node split and all descendant splits,
+        # given the node's parent split.
         cbn_est_up = {node: 1.0 for node in tree.traverse('postorder') if not node.is_root()}
+
+        # Up[node] contains the probability all descendant splits, given the node split.
         Up = {node: 1.0 for node in tree.traverse('postorder') if not node.is_root()}
+
         nodetobitMap = {node: self.clade_to_bitarr(node.get_leaf_names()) for node in tree.traverse('postorder') if not node.is_root()}
         bipart_bitarr_up = {}
+
+        # bipart_bitarr_prob[node] contains the joint probability of the tree and the rooting above node.
         bipart_bitarr_prob = {}
 
+        # Upward (leaf-to-root) pass
+        # Tree likelihood should be available at the end of this pass.
+        # cbn_est_up and Up are filled out.
         for node in tree.traverse('postorder'):
             if not node.is_leaf() and not node.is_root():
+                # Collecting the child conditional probabilities.
+                # Up[node] is complete now.
                 for child in node.children:
                     Up[node] *= cbn_est_up[child]
 
                 bipart_bitarr = min(nodetobitMap[child] for child in node.children)
                 bipart_bitarr_up[node] = bipart_bitarr
                 if not node.up.is_root():
+                    # cbn_est_up[node] is a product of Up[node] and the conditional probability of the node split,
+                    # given the parent split.
                     cbn_est_up[node] *= Up[node]
                     parent_bipart_bitarr = min([nodetobitMap[node.get_sisters()[0]], nodetobitMap[node]])
                     comb_parent_bipart_bitarr = nodetobitMap[node.get_sisters()[0]] + nodetobitMap[node]
@@ -564,10 +593,15 @@ class SBN:
                         ) == 0.0 or self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] == 0.0:
                         cbn_est_up[node] = 0.0
                     else:
+                        # Here cbn_est_up[node] is complete, multiplying by the conditional probability
+                        # of the node split, given the parent split.
                         cbn_est_up[node] *= (self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] +
                                              MAP * self.alpha * normalizing_const_est / self.clade_double_bipart_len[comb_parent_bipart_bitarr.to01()]
                                              ) / (normalizing_const + MAP * self.alpha * normalizing_const_est)
 
+        # Downward (root-to-leaf) pass
+        # cbn_est_down[node] contains the conditional probability of all splits above the parent split,
+        # given the parent split.
         cbn_est_down = {node: 1.0 for node in tree.traverse('preorder') if not node.is_root()}
         bipart_bitarr_down = {}
         for node in tree.traverse('preorder'):
@@ -578,15 +612,19 @@ class SBN:
 
                     normalizing_const = self.clade_bipart_dict[(~nodetobitMap[node]).to01()][parent_bipart_bitarr.to01()]
                     normalizing_const_est = self.clade_bipart_freq_est[(~nodetobitMap[node]).to01()][parent_bipart_bitarr.to01()]
+
                     if (normalizing_const + MAP * self.alpha * normalizing_const_est) == 0.0:
                         cbn_est_down[node] = 0.0
                     else:
                         for sister in node.get_sisters():
                             if not sister.is_leaf():
+                                # For each sister node, cbn_est_down[node] factors in Up[sister]:
+                                # the probability of all sister-descendant splits, given the sister split.
                                 cbn_est_down[node] *= Up[sister]
                                 bipart_bitarr = min(nodetobitMap[child] for child in sister.children)
                                 comb_parent_bipart_bitarr = ((~nodetobitMap[node]) ^ nodetobitMap[sister]) + nodetobitMap[sister]
                                 if self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] > 0.0:
+                                    # Multiply by the conditional probability of the node split, given the parent split.
                                     cbn_est_down[node] *= (
                                         self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] +
                                         MAP * self.alpha * normalizing_const_est / self.clade_double_bipart_len[comb_parent_bipart_bitarr.to01()]) / (
@@ -597,15 +635,21 @@ class SBN:
                     sister = node.get_sisters()[0]
                     parent_bipart_bitarr = min([nodetobitMap[sister], ~nodetobitMap[node.up]])
                     bipart_bitarr_down[node] = parent_bipart_bitarr
+
                     normalizing_const = self.clade_bipart_dict[(~nodetobitMap[node]).to01()][parent_bipart_bitarr.to01()]
                     normalizing_const_est = self.clade_bipart_freq_est[(~nodetobitMap[node]).to01()][parent_bipart_bitarr.to01()]
 
                     if (normalizing_const + MAP * self.alpha * normalizing_const_est) == 0.0:
                         cbn_est_down[node] = 0.0
                     else:
+                        # cbn_est_down[node] factors in cbn_est_down[node.up]:
+                        # the conditional probability of all splits above the parent's parent split,
+                        # given the parent's parent split.
                         cbn_est_down[node] *= cbn_est_down[node.up]
                         comb_parent_bipart_bitarr = nodetobitMap[sister] + ~nodetobitMap[node.up]
                         if self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr_down[node.up].to01()] > 0.0:
+                            # Multiply by the conditional probability of the parent's parent split,
+                            # given the parent split.
                             cbn_est_down[node] *= (
                                 self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr_down[node.up].to01()] +
                                 MAP * self.alpha * normalizing_const_est / self.clade_double_bipart_len[comb_parent_bipart_bitarr.to01()]) / (
@@ -614,9 +658,12 @@ class SBN:
                             cbn_est_down[node] = 0.0
 
                         if not sister.is_leaf():
+                            # Multiply by the probability of all sister-descendant splits, given the sister split.
                             cbn_est_down[node] *= Up[sister]
                             comb_parent_bipart_bitarr = ~nodetobitMap[node.up] + nodetobitMap[sister]
                             if self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr_up[sister].to01()] > 0.0:
+                                # Multiply by by the conditional probability of the sister split,
+                                # given the parent split.
                                 cbn_est_down[node] *= (self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr_up[sister].to01(
                                 )] + MAP * self.alpha * normalizing_const_est / self.clade_double_bipart_len[comb_parent_bipart_bitarr.to01()]) / (
                                     normalizing_const + MAP * self.alpha * normalizing_const_est)
@@ -626,6 +673,8 @@ class SBN:
                 parent_bipart_bitarr = self._minor_bitarr(nodetobitMap[node])
                 normalizing_const = self.clade_dict[parent_bipart_bitarr.to01()]
                 normalizing_const_est = self.clade_freq_est[parent_bipart_bitarr.to01()]
+                # bipart_bitarr_prob[node] (abuse of notation) factors in the probability of the node-parent split
+                # as a root split.
                 bipart_bitarr_prob[parent_bipart_bitarr.to01()] = (
                     self.clade_dict[parent_bipart_bitarr.to01()] + MAP * self.alpha * normalizing_const_est) / (1.0 + MAP * self.alpha)
 
@@ -633,9 +682,11 @@ class SBN:
                     bipart_bitarr_prob[parent_bipart_bitarr.to01()] = 0.0
                 else:
                     if not node.is_leaf():
+                        # Multiply by the probability of all descendant splits, given the node split.
                         bipart_bitarr_prob[parent_bipart_bitarr.to01()] *= Up[node]
                         comb_parent_bipart_bitarr = ~nodetobitMap[node] + nodetobitMap[node]
                         if self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr_up[node].to01()] > 0.0:
+                            # Multiply by the probability of the node split given the rooting.
                             bipart_bitarr_prob[parent_bipart_bitarr.to01()] *= (
                                 self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr_up[node].to01()] +
                                 MAP * self.alpha * normalizing_const_est / self.clade_double_bipart_len[comb_parent_bipart_bitarr.to01()]) / (
@@ -643,9 +694,12 @@ class SBN:
                         else:
                             bipart_bitarr_prob[parent_bipart_bitarr.to01()] = 0.0
 
+                    # Multiply by the conditional probability of all splits above the parent split,
+                    # given the parent split.
                     bipart_bitarr_prob[parent_bipart_bitarr.to01()] *= cbn_est_down[node]
                     comb_parent_bipart_bitarr = nodetobitMap[node] + ~nodetobitMap[node]
                     if self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr_down[node].to01()] > 0.0:
+                        # Multiply by the probability of the parent split given the rooting.
                         bipart_bitarr_prob[parent_bipart_bitarr.to01()] *= (
                             self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr_down[node].to01()] +
                             MAP * self.alpha * normalizing_const_est / self.clade_double_bipart_len[comb_parent_bipart_bitarr.to01()]) / (
@@ -653,6 +707,8 @@ class SBN:
                     else:
                         bipart_bitarr_prob[parent_bipart_bitarr.to01()] = 0.0
 
+        # bipart_bitarr_prob is complete now.
+        # If you sum over all values in the dict, you get the likelihood of the unrooted tree.
         return bipart_bitarr_prob
 
     def bn_estimate(self, tree, MAP=False):
