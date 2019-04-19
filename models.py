@@ -428,6 +428,27 @@ class SBN:
         return logp
 
     def bn_em_count(self, tree_count, tree_id, maxiter=100, miniter=50, abstol=1e-04, monitor=False, MAP=False):
+        """Run EM-algorithm on a set of unrooted tree count data.
+
+        For theory and comments, see Generalizing Tree Probability Estimation via Bayesian Networks, Zhang & Matsen
+
+        :param tree_count: Dictionary where keys are tree topology IDs
+        and the values are integers representing how many times that
+        tree appeared in the sample data.
+        :param tree_id: Dictionary where the keys are tree topology IDs
+        and the values are singleton lists containing the tree
+        corresponding to the topology ID.
+        :param maxiter: The maximum number of EM iterations (default=100).
+        :param miniter: The minimum number of EM iterations (default=500).
+        :param abstol: The stepwise likelihood difference below which
+        the algorithm will consider itself converged and try to
+        terminate, if at lease miniter steps have passed (default=1e-4).
+        :param monitor: Boolean, whether to print iteration diagnostic
+        (default=False).
+        :param MAP: Boolean, whether to use regularization
+        (default=False).
+        :return: The log-likelihood.
+        """
         self.bn_train_count(tree_count, tree_id)
         total_count = sum(tree_count.values()) * 1.0
         logp = []
