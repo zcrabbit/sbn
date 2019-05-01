@@ -38,21 +38,26 @@ class SBN:
         self.clade_bipart_freq_est = defaultdict(lambda: defaultdict(float))
         self.clade_double_bipart_len = defaultdict(int)
 
+    # Concatenate two bitarrays with the lesser bitarray on the left.
     def _combine_bitarr(self, arrA, arrB):
         if arrA < arrB:
             return arrA + arrB
         else:
             return arrB + arrA
 
+    # OR a composite bitarray, i.e. merge a split into its parent clade.
     def _merge_bitarr(self, key):
         return bitarray(key[:self.ntaxa]) | bitarray(key[self.ntaxa:])
 
+    # Decomposes a composite bitarray and returns the lesser bitarray.
     def _decomp_minor_bitarr(self, key):
         return min(bitarray(key[:self.ntaxa]), bitarray(key[self.ntaxa:]))
 
+    # Symmetry collapse by returning the lesser of the bitarray and its inverse.
     def _minor_bitarr(self, arrA):
         return min(arrA, ~arrA)
 
+    # Creates an indicator bitarray from a collection of taxa.
     def clade_to_bitarr(self, clade):
         bit_list = ['0'] * self.ntaxa
         for taxon in clade:
@@ -254,6 +259,7 @@ class SBN:
                 comb_parent_bipart_bitarr = nodetobitMap[node] + ~nodetobitMap[node]
                 self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] += node_wts
 
+    # Trains SBN with conditional clade distributions from sample trees.
     def ccd_train_count(self, tree_count, tree_id):
         self.clade_dict = defaultdict(float)
         self.clade_bipart_dict = defaultdict(lambda: defaultdict(float))
@@ -265,6 +271,7 @@ class SBN:
             wts = count / total_count
             self.ccd_dict_update(tree, wts)
 
+    # Trains SBN with conditional clade distributions from tree probabilities.
     def ccd_train_prob(self, tree_dict, tree_names, tree_wts):
         self.clade_dict = defaultdict(float)
         self.clade_bipart_dict = defaultdict(lambda: defaultdict(float))
@@ -274,6 +281,9 @@ class SBN:
 
             self.ccd_dict_update(tree, wts)
 
+    # Trains SBN with conditional probability distributions from sample trees.
+    # Commenter note: I might have the name "conditional probability distributions"
+    # wrong--it's using subsplit probabilities
     def bn_train_count(self, tree_count, tree_id):
         """Train an SBN on tree count data.
 
@@ -307,6 +317,9 @@ class SBN:
         for key in self.clade_double_bipart_dict:
             self.clade_double_bipart_len[key] = len(self.clade_double_bipart_dict[key])
 
+    # Trains SBN with conditional probability distributions from tree probabilities.
+    # Commenter note: I might have the name "conditional probability distributions"
+    # wrong--it's using subsplit probabilities
     def bn_train_prob(self, tree_dict, tree_names, tree_wts):
         self.clade_dict = defaultdict(float)
         self.clade_bipart_dict = defaultdict(lambda: defaultdict(float))
@@ -324,29 +337,74 @@ class SBN:
             self.clade_double_bipart_len[key] = len(self.clade_double_bipart_dict[key])
 
     def bn_em_root_prob(self, tree, bipart_bitarr_prob, nodetobitMap):
+        """Calculate the rooting probability distribution.
+
+        :param tree: Tree (ete3) topology and edge lengths.
+        :param bipart_bitarr_prob: Dictionary mapping each node (via to01())
+        to the likelihood of the tree joint with rooting at that node.
+        :param nodetobitMap: Cached dictionary mapping each node to
+        the bitarray representation of its descendant leaves.
+        :return: tuple (root_prob, cum_root_prob, normalizing_const),
+        where root_prob is a dictionary mapping each node to
+        the conditional probability distribution of rooting at that node
+        given the unrooted tree,
+        cum_root_prob is a dictionary mapping each node to
+        the conditional probability distribution of rooting at _or below_
+        that node given the unrooted tree,
+        and normalizing_const is the probability/likelihood of the
+        unrooted tree.
+        """
         root_prob = {}
         bipart_bitarr_up = {}
         cum_root_prob = defaultdict(float)
+        # NB, Abuse of comment notation: dict[node] shorthand
+        # for dict[bipart_bitarr.to01()] where bipart_bitarr is the
+        # bitarray signature for node.
         for node in tree.traverse('postorder'):
             if not node.is_root():
                 bipart_bitarr = self._minor_bitarr(nodetobitMap[node])
                 bipart_bitarr_up[node] = bipart_bitarr
+                # This line initializes cum_root_prob[node] to
+                # Pr(root @ node, T^u)
                 cum_root_prob[bipart_bitarr.to01()] += bipart_bitarr_prob[bipart_bitarr.to01()]
                 if not node.is_leaf():
+                    # This loop adds Pr(root below node, T^u) to
+                    # cum_root_prob[node] resulting in cum_root_prob[node]
+                    # containing Pr(root @ or below node, T^u)
                     for child in node.children:
                         cum_root_prob[bipart_bitarr.to01()] += cum_root_prob[bipart_bitarr_up[child].to01()]
 
+        # normalizing_const will contain the unrooted tree likelihood,
+        # as the sum of the joint distribution over all tree rootings.
         normalizing_const = 0.0
         for child in tree.children:
             normalizing_const += cum_root_prob[bipart_bitarr_up[child].to01()]
 
         for key in bipart_bitarr_prob:
+            # This line fills root_prob[node] with Pr(root @ node | T^u)
             root_prob[key] = bipart_bitarr_prob[key] / normalizing_const
+            # This line converts cum_root_prob[node] from
+            # Pr(root @ or below node, T^u) to Pr(root @ or below node | T^u)
             cum_root_prob[key] /= normalizing_const
 
         return root_prob, cum_root_prob, normalizing_const
 
     def bn_dict_em_update(self, tree, wts, bipart_bitarr_prob, clade_dict, clade_bipart_dict, clade_double_bipart_dict):
+        """EM-algorithm update step for one tree.
+
+        :param tree: Tree (ete3) containing topology and edge lengths.
+        :param wts: Weight of tree in the tree sample or probability distribution.
+        :param bipart_bitarr_prob: Dictionary mapping each node (via to01())
+        to the likelihood of the tree joint with rooting at that node.
+        :param clade_dict: Dictionary mapping each node
+        to the probability of observing that root split.
+        :param clade_bipart_dict: Dictionary mapping each node
+        to the probability of observing that non-root split.
+        :param clade_double_bipart_dict: Dictionary mapping each node
+        to the probability of observing that subsplit, specifically the
+        joint probability of the parent split and child split.
+        :return: The likelihood of the unrooted tree.
+        """
         nodetobitMap = {node: self.clade_to_bitarr(node.get_leaf_names()) for node in tree.traverse('postorder') if not node.is_root()}
         root_prob, cum_root_prob, est_prob = self.bn_em_root_prob(tree, bipart_bitarr_prob, nodetobitMap)
 
@@ -354,49 +412,105 @@ class SBN:
             if not node.is_root():
                 bipart_bitarr = self._minor_bitarr(nodetobitMap[node])
                 node_wts = wts * root_prob[bipart_bitarr.to01()]
+                # Update clade_dict adding wts * Pr(root @ node | T^u)
                 clade_dict[bipart_bitarr.to01()] += node_wts
 
                 if not node.is_leaf():
+                    # Orientation 1/2
+                    # Root node is 'above' node, so node's subsplit
+                    # splits its 'child' clades.
                     children_bipart_bitarr = min([nodetobitMap[child] for child in node.children])
                     cum_node_wts = wts * (1.0 - cum_root_prob[bipart_bitarr.to01()] + root_prob[bipart_bitarr.to01()])
+                    # Update clade_bipart_dict (Orientation 1/2) adding wts * Pr(root @ or above node | T^u)
                     clade_bipart_dict[nodetobitMap[node].to01()][children_bipart_bitarr.to01()] += cum_node_wts
                     if not node.up.is_root():
                         parent_bipart_bitarr = self._minor_bitarr(nodetobitMap[node.up])
                         cum_node_wts = wts * (1.0 - cum_root_prob[parent_bipart_bitarr.to01()] + root_prob[parent_bipart_bitarr.to01()])
+                        # Orientation 1/6
+                        # If root subsplit is beyond node.up, this
+                        # well-defines the parent subsplit at node.up.
                         comb_parent_bipart_bitarr = nodetobitMap[node.get_sisters()[0]] + nodetobitMap[node]
+                        # Update clade_double_bipart_dict (Orientation 1/6) adding wts * Pr(root @ or above parent node | T^u)
                         clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][children_bipart_bitarr.to01()] += cum_node_wts
 
                         cum_node_wts = wts * cum_root_prob[self._minor_bitarr(nodetobitMap[node.get_sisters()[0]]).to01()]
+                        # Orientation 2/6
+                        # If root subsplit is linked via a sister, this
+                        # well-defines the parent subsplit at node.up.
                         comb_parent_bipart_bitarr = ~nodetobitMap[node.up] + nodetobitMap[node]
+                        # Update clade_double_bipart_dict (Orientation 2/6) adding wts * Pr(root @ or below sister node | T^u)
                         clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][children_bipart_bitarr.to01()] += cum_node_wts
                     else:
                         for sister in node.get_sisters():
                             cum_node_wts = wts * cum_root_prob[self._minor_bitarr(nodetobitMap[sister] ^ (~nodetobitMap[node])).to01()]
+                            # Orientation 2/6
+                            # If root subsplit is linked via a sister, this
+                            # well-defines the parent subsplit at node.up.
                             comb_parent_bipart_bitarr = nodetobitMap[sister] + nodetobitMap[node]
+                            # Update clade_double_bipart_dict (Orientation 2/6 again) adding wts * Pr(root @ or below sister node | T^u)
                             clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][children_bipart_bitarr.to01()] += cum_node_wts
 
+                    # Orientation 3/6
+                    # If root subsplit is on the edge between node and
+                    # node.up, this well-defines the root split.
                     comb_parent_bipart_bitarr = ~nodetobitMap[node] + nodetobitMap[node]
+                    # Update clade_double_bipart_dict (Orientation 3/6) adding wts * Pr(root @ node | T^u)
                     clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][children_bipart_bitarr.to01()] += node_wts
 
+                # Orientation 2/2
+                # Root node is 'below' node, so node's subsplit
+                # splits its 'sister' and/or 'parent' clades.
+                # NB: tree topology is unrooted, but is stored in a
+                # rooted tree format (with a trifurcating root).
                 if not node.up.is_root():
                     children_bipart_bitarr = min([nodetobitMap[sister] for sister in node.get_sisters()] + [~nodetobitMap[node.up]])
                 else:
                     children_bipart_bitarr = min([nodetobitMap[sister] for sister in node.get_sisters()])
 
                 cum_node_wts = wts * cum_root_prob[bipart_bitarr.to01()]
+                # Update clade_bipart_dict (Orientation 2/2) adding wts * Pr(root @ or below node | T^u)
                 clade_bipart_dict[(~nodetobitMap[node]).to01()][children_bipart_bitarr.to01()] += cum_node_wts
                 if not node.is_leaf():
                     for child in node.children:
                         cum_node_wts = wts * cum_root_prob[self._minor_bitarr(nodetobitMap[node] ^ nodetobitMap[child]).to01()]
+                        # Orientations 4/6 and 5/6
+                        # If root subsplit is beyond node's children, this
+                        # well-defines the parent subsplit at node.
                         comb_parent_bipart_bitarr = nodetobitMap[child] + ~nodetobitMap[node]
+                        # Update clade_double_bipart_dict (Orientations 4/6 and 5/6) adding wts * Pr(root @ or below child node | T^u)
                         clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][children_bipart_bitarr.to01()] += cum_node_wts
 
+                # Orientation 6/6
+                # If root subsplit is on the edge between node.up and
+                # node, this well-defines the root split.
                 comb_parent_bipart_bitarr = nodetobitMap[node] + ~nodetobitMap[node]
+                # Update clade_double_bipart_dict (Orientation 6/6) adding wts * Pr(root @ node | T^u)
                 clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][children_bipart_bitarr.to01()] += node_wts
 
+        # Returns Pr(T^u)
         return est_prob
 
     def bn_em_prob(self, tree_dict, tree_names, tree_wts, maxiter=100, miniter=50, abstol=1e-04, monitor=False, MAP=False):
+        """Run EM-algorithm on a set of unrooted tree probability data.
+
+        For theory and comments, see Generalizing Tree Probability Estimation via Bayesian Networks, Zhang & Matsen
+
+        :param tree_dict: Dictionary where keys are tree topology IDs
+        and the values are integers representing how many times that
+        tree appeared in the sample data.
+        :param tree_names: Collection of tree topology IDs.
+        :param tree_wts: List of tree probabilities.
+        :param maxiter: The maximum number of EM iterations (default=100).
+        :param miniter: The minimum number of EM iterations (default=50).
+        :param abstol: The stepwise likelihood difference below which
+        the algorithm will consider itself converged and try to
+        terminate, if at lease miniter steps have passed (default=1e-4).
+        :param monitor: Boolean, whether to print iteration diagnostic
+        (default=False).
+        :param MAP: Boolean, whether to use regularization
+        (default=False).
+        :return: The log-likelihood.
+        """
         self.bn_train_prob(tree_dict, tree_names, tree_wts)
         logp = []
 
@@ -439,7 +553,7 @@ class SBN:
         and the values are singleton lists containing the tree
         corresponding to the topology ID.
         :param maxiter: The maximum number of EM iterations (default=100).
-        :param miniter: The minimum number of EM iterations (default=500).
+        :param miniter: The minimum number of EM iterations (default=50).
         :param abstol: The stepwise likelihood difference below which
         the algorithm will consider itself converged and try to
         terminate, if at lease miniter steps have passed (default=1e-4).
@@ -482,17 +596,27 @@ class SBN:
 
         return logp
 
+    # Gets a copy of clade dictionaries
+    # Commenter's Note: This is not symmetric with set_clade_bipart, possibly typo or not updated?
     def get_clade_bipart(self):
         return deepcopy(self.clade_dict), deepcopy(self.clade_bipart_dict)
 
+    # Sets clade dictionaries
     def set_clade_bipart(self, clade_dict, clade_bipart_dict, clade_double_bipart_dict):
         self.clade_dict, self.clade_bipart_dict, self.clade_double_bipart_dict = deepcopy(clade_dict), deepcopy(clade_bipart_dict), deepcopy(
             clade_double_bipart_dict)
 
     # TODO: Maybe switch to log-addition instead of linear-multiplication
     def ccd_estimate(self, tree, unrooted=True):
+        """Calculate tree (rooted or unrooted) likelihood using clade conditional distibutions.
+
+        :param tree: Tree (ete3) containing topology and edge lengths.
+        :param unrooted: boolean (default False) whether tree is unrooted or not.
+        :return: tree likelihood.
+        """
         ccd_est = 1.0
         nodetobitMap = {}
+        # One-pass Bayesian network probability calculation
         for node in tree.traverse('levelorder'):
             if node.is_root():
                 if unrooted:
@@ -530,14 +654,22 @@ class SBN:
 
     # TODO: Maybe switch to log-addition instead of linear-multiplication
     def bn_estimate_rooted(self, tree, MAP=False):
+        """Calculate rooted tree likelihood using subsplit distributions.
+
+        :param tree: Tree (ete3) containing topology and edge lengths.
+        :param MAP: boolean (default False) whether to regularize or not.
+        :return: tree likelihood.
+        """
         bn_est = 1.0
         nodetobitMap = {}
+        # One-pass Bayesian network probability calculation
         for node in tree.traverse('levelorder'):
             if node.is_root():
                 for child in node.children:
                     child_bitarr = self.clade_to_bitarr(child.get_leaf_names())
                     nodetobitMap[child] = child_bitarr
                 normalizing_const_est = self.clade_freq_est[self._minor_bitarr(child_bitarr).to01()]
+                # Root split probability with optional regularization
                 bn_est *= (self.clade_dict[self._minor_bitarr(child_bitarr).to01()] + MAP * self.alpha * normalizing_const_est) / (
                     1.0 + MAP * self.alpha)
             elif not node.is_leaf():
@@ -562,6 +694,7 @@ class SBN:
                     break
 
                 if self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] > 0:
+                    # Subsplit conditional probability with optional regularization
                     bn_est *= (self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] +
                                MAP * self.alpha * normalizing_const_est / self.clade_double_bipart_len[comb_parent_bipart_bitarr.to01()]) / (
                                    normalizing_const + MAP * self.alpha * normalizing_const_est)
@@ -732,9 +865,11 @@ class SBN:
         # If you sum over all values in the dict, you get the likelihood of the unrooted tree.
         return bipart_bitarr_prob
 
+    # Summarizes the joint Pr(root @ node, T^u) into Pr(T^U)
     def bn_estimate(self, tree, MAP=False):
         return np.sum(self._bn_estimate_fast(tree, MAP).values())
 
+    # Calculates the KL-Divergence of the different SBN backends relative to truth
     def kl_div(self, method='all', MAP=False):
         kl_div = defaultdict(float)
         for tree, wts in self.emp_tree_freq.iteritems():
