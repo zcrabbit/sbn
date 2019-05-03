@@ -38,41 +38,63 @@ class SBN:
         self.clade_bipart_freq_est = defaultdict(lambda: defaultdict(float))
         self.clade_double_bipart_len = defaultdict(int)
 
-    # Concatenate two bitarrays with the lesser bitarray on the left.
     def _combine_bitarr(self, arrA, arrB):
+        """Concatenate two bitarrays with the lesser bitarray on the left.
+
+        :param arrA: bitarray representing a split.
+        :param arrB: bitarray representing a split.
+        :return: Composite bitarray with the lesser bitarray on the left.
+        """
         if arrA < arrB:
             return arrA + arrB
         else:
             return arrB + arrA
 
-    # OR a composite bitarray, i.e. merge a split into its parent clade.
     def _merge_bitarr(self, key):
+        """OR a composite bitarray, i.e. merge a split into its parent clade.
+
+        :param key: string of 0s and 1s representing a composite bitarray.
+        :return: bitarray representing the OR of the two sub-bitarrays.
+        """
         return bitarray(key[:self.ntaxa]) | bitarray(key[self.ntaxa:])
 
-    # Decomposes a composite bitarray and returns the lesser bitarray.
     def _decomp_minor_bitarr(self, key):
+        """Decomposes a composite bitarray and returns the lesser bitarray.
+
+        :param key: string of 0s and 1s representing a composite bitarray.
+        :return: bitarray representing the lesser of the two sub-bitarrays.
+        """
         return min(bitarray(key[:self.ntaxa]), bitarray(key[self.ntaxa:]))
 
-    # Symmetry collapse by returning the lesser of the bitarray and its inverse.
     def _minor_bitarr(self, arrA):
+        """Symmetry collapse by returning the lesser of the bitarray and its inverse.
+
+        :param arrA: bitarray representing a split.
+        :return: bitarray containing arrA or its NOT, whichever is lesser.
+        """
         return min(arrA, ~arrA)
 
-    # Creates an indicator bitarray from a collection of taxa.
     def clade_to_bitarr(self, clade):
+        """Creates an indicator bitarray from a collection of taxa.
+
+        :param clade: collection containing elements the SBN object's taxa list.
+        :return: bitarray indicating which taxa are in clade.
+        """
         bit_list = ['0'] * self.ntaxa
         for taxon in clade:
             bit_list[self.map[taxon]] = '1'
         return bitarray(''.join(bit_list))
 
     def check_clade_dict(self):
+        """Check summary statistics for each clade/split."""
         print "clade_dict sum: {:.12f}".format(sum(self.clade_dict.values()))
         print "clade_bipart_dict tabular sum:"
         for key in self.clade_bipart_dict:
             bipart_bitarr = self._minor_bitarr(bitarray(key))
             print '{}:{:.12f}|{:.12f}'.format(bipart_bitarr.to01(), sum(self.clade_bipart_dict[key].values()), self.clade_dict[bipart_bitarr.to01()])
 
-    # check the validity of weighted frequency tables used in EM
     def check_clade_dict_em(self):
+        """Check the validity of weighted frequency tables used in EM."""
         print "clade_dict sum: {:.12f}".format(sum(self.clade_dict.values()))
         print "clade_double_bipart_dict tabular sum:"
         for key in self.clade_double_bipart_dict:
@@ -85,8 +107,11 @@ class SBN:
                 print '{}|{}:{:.12f}|{:.12f}'.format(parent_clade_bitarr.to01(), bipart_bitarr.to01(),
                                                      sum(self.clade_double_bipart_dict[key].values()), self.clade_dict[bipart_bitarr.to01()])
 
-    # Dirichlet conjugate prior
     def logprior(self):
+        """Calculate the Dirichlet conjugate prior.
+
+        :return: float containing the value of the prior.
+        """
         return self.alpha * sum([
             self.clade_freq_est[key] * np.log((self.clade_dict[key] + self.alpha * self.clade_freq_est[key]) / (1.0 + self.alpha))
             for key in self.clade_dict
@@ -109,17 +134,13 @@ class SBN:
         """Updates clade distribution.
 
         Updates the clade dictionary, based on a single tree topology,
-        weighted by the number of times that tree appears in the
-        greater sample.
+        weighted by the fraction of times that tree appears in the
+        sample or distribution.
 
-        Parameters
-        ----------
-        tree : tree
-            Unrooted tree object providing the topology.
-
-        wts : float
-            Weight representing the fraction of the sampled trees that
-            this tree topology represents.
+        :param tree: Tree (ete3) unrooted tree object providing the topology.
+        :param wts: float representing the fraction of the sampled trees that
+        this tree topology represents.
+        :return: dictionary mapping nodes to their bitarray representation.
         """
         nodetobitMap = {}
         for node in tree.traverse('levelorder'):
@@ -137,19 +158,14 @@ class SBN:
         """Updates conditional clade distribution (CCD).
 
         Updates the CCD dictionary, based on a single tree topology,
-        weighted by the number of times that tree appears in the
-        greater sample.
+        weighted by the fraction of times that tree appears in the
+        sample or distribution.
 
-        Parameters
-        ----------
-        tree : tree
-            Unrooted tree object providing the topology.
-
-        wts : float
-            Weight representing the fraction of the sampled trees that
-            this tree topology represents.
+        :param tree: Tree (ete3) unrooted tree object providing the topology.
+        :param wts: float representing the fraction of the sampled trees that
+        this tree topology represents.
+        :return: dictionary mapping nodes to their bitarray representation.
         """
-
         nodetobitMap = self.clade_update(tree, wts)
         for node in tree.traverse('levelorder'):
             # Updates the conditional clade distribution (CCD)
@@ -185,20 +201,13 @@ class SBN:
         weighted by the number of times that tree appears in the
         greater sample.
 
-        Parameters
-        ----------
-        tree : tree
-            Unrooted tree object providing the topology.
-
-        wts : float
-            Weight representing the fraction of the sampled trees that
-            this tree topology represents.
-
-        root_wts : dict, optional
-            Dictionary mapping node bit signatures to edge weights.
-            Used for SBN-EM and SBN-EM-alpha.
+        :param tree: Tree (ete3) unrooted tree object providing the topology.
+        :param wts: float representing the fraction of the sampled trees that
+        this tree topology represents.
+        :param root_wts: dictionary, optional, mapping node bit
+        signatures to edge weights. Used for SBN-EM and SBN-EM-alpha.
+        :return: None
         """
-
         nodetobitMap = self.ccd_dict_update(tree, wts)
         for node in tree.traverse('levelorder'):
             if not root_wts:
@@ -259,8 +268,14 @@ class SBN:
                 comb_parent_bipart_bitarr = nodetobitMap[node] + ~nodetobitMap[node]
                 self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] += node_wts
 
-    # Trains SBN with conditional clade distributions from sample trees.
     def ccd_train_count(self, tree_count, tree_id):
+        """Trains SBN with conditional clade distributions from sample trees.
+
+        :param tree_count: dictionary mapping tree topology ID to count
+        of that tree in the sample.
+        :param tree_id: dictionary mapping tree topology ID to a
+        singleton list containing the tree object.
+        """
         self.clade_dict = defaultdict(float)
         self.clade_bipart_dict = defaultdict(lambda: defaultdict(float))
         total_count = sum(tree_count.values()) * 1.0
@@ -271,8 +286,14 @@ class SBN:
             wts = count / total_count
             self.ccd_dict_update(tree, wts)
 
-    # Trains SBN with conditional clade distributions from tree probabilities.
     def ccd_train_prob(self, tree_dict, tree_names, tree_wts):
+        """Trains SBN with conditional clade distributions from tree probabilities.
+
+        :param tree_dict: dictionary mapping tree topology ID to count
+        of that tree in the sample.
+        :param tree_names: list of tree topology IDs.
+        :param tree_wts: list of tree probabilities.
+        """
         self.clade_dict = defaultdict(float)
         self.clade_bipart_dict = defaultdict(lambda: defaultdict(float))
         for i, tree_name in enumerate(tree_names):
@@ -281,22 +302,17 @@ class SBN:
 
             self.ccd_dict_update(tree, wts)
 
-    # Trains SBN with conditional probability distributions from sample trees.
-    # Commenter note: I might have the name "conditional probability distributions"
-    # wrong--it's using subsplit probabilities
     def bn_train_count(self, tree_count, tree_id):
-        """Train an SBN on tree count data.
+        """Trains SBN with conditional probability distributions from sample trees.
 
-        Parameters
-        ----------
-        tree_count : dict
-            Dictionary mapping tree topology ID to count of that tree
-            in the sample.
-        tree_id : dict
-            Dictionary mapping tree topology ID to a singleton list
-            containing the tree object.
+        Commenter note: I might have the name "conditional probability
+        distributions" wrong--it's using subsplit probabilities
+
+        :param tree_count: dictionary mapping tree topology ID to count
+        of that tree in the sample.
+        :param tree_id: dictionary mapping tree topology ID to a
+        singleton list containing the tree object.
         """
-
         # Clear the SBN model dictionaries
         self.clade_dict = defaultdict(float)
         self.clade_bipart_dict = defaultdict(lambda: defaultdict(float))
@@ -317,10 +333,17 @@ class SBN:
         for key in self.clade_double_bipart_dict:
             self.clade_double_bipart_len[key] = len(self.clade_double_bipart_dict[key])
 
-    # Trains SBN with conditional probability distributions from tree probabilities.
-    # Commenter note: I might have the name "conditional probability distributions"
-    # wrong--it's using subsplit probabilities
     def bn_train_prob(self, tree_dict, tree_names, tree_wts):
+        """Trains SBN with conditional probability distributions from tree probabilities.
+
+        Commenter note: I might have the name "conditional probability
+        distributions" wrong--it's using subsplit probabilities
+
+        :param tree_dict: dictionary mapping tree topology ID to count
+        of that tree in the sample.
+        :param tree_names: list of tree topology IDs.
+        :param tree_wts: list of tree probabilities.
+        """
         self.clade_dict = defaultdict(float)
         self.clade_bipart_dict = defaultdict(lambda: defaultdict(float))
         self.clade_double_bipart_dict = defaultdict(lambda: defaultdict(float))
@@ -596,13 +619,27 @@ class SBN:
 
         return logp
 
-    # Gets a copy of clade dictionaries
-    # Commenter's Note: This is not symmetric with set_clade_bipart, possibly typo or not updated?
     def get_clade_bipart(self):
+        """Gets a copy of clade dictionaries.
+
+        Commenter's Note: This is not symmetric with set_clade_bipart, possibly typo or not updated?
+
+        :return: tuple containing a dictionary of root split
+        probabilities and a dictionary of dictionaries containing clade
+        split probabilities.
+        """
         return deepcopy(self.clade_dict), deepcopy(self.clade_bipart_dict)
 
-    # Sets clade dictionaries
     def set_clade_bipart(self, clade_dict, clade_bipart_dict, clade_double_bipart_dict):
+        """Sets clade dictionaries.
+
+        :param clade_dict: dictionary of root split probabilities.
+        :param clade_bipart_dict: dictionary of dictionaries
+        containing clade split probabilities.
+        :param clade_double_bipart_dict: dictionary of dictionaries
+        containing subsplit probabilities (technically joint parent
+        split, child split probabilities).
+        """
         self.clade_dict, self.clade_bipart_dict, self.clade_double_bipart_dict = deepcopy(clade_dict), deepcopy(clade_bipart_dict), deepcopy(
             clade_double_bipart_dict)
 
@@ -656,7 +693,7 @@ class SBN:
     def bn_estimate_rooted(self, tree, MAP=False):
         """Calculate rooted tree likelihood using subsplit distributions.
 
-        :param tree: Tree (ete3) containing topology and edge lengths.
+        :param tree: Tree (ete3) containing tree topology.
         :param MAP: boolean (default False) whether to regularize or not.
         :return: tree likelihood.
         """
@@ -707,7 +744,13 @@ class SBN:
     # TODO: Maybe switch to log-addition instead of linear-multiplication
     # Regularization linear-addition might present an obstacle
     def _bn_estimate_fast(self, tree, MAP=False):
-        """Two-pass algorithm for calculating likelihood on an edge by edge basis."""
+        """Two-pass algorithm for calculating likelihood on an edge by edge basis.
+
+        :param tree: Tree (ete3) containing tree topology.
+        :param MAP: boolean (default False) whether to regularize or not.
+        :return: dictionary mapping nodes' clade-01 representation to
+        the joint Pr(root @ node, T^u)
+        """
 
         # cbn_est_up[node] contains the probability of the node split and all descendant splits,
         # given the node's parent split.
@@ -865,12 +908,26 @@ class SBN:
         # If you sum over all values in the dict, you get the likelihood of the unrooted tree.
         return bipart_bitarr_prob
 
-    # Summarizes the joint Pr(root @ node, T^u) into Pr(T^U)
     def bn_estimate(self, tree, MAP=False):
+        """Summarizes the joint Pr(root @ node, T^u) into Pr(T^u).
+
+        :param tree: Tree (ete3) containing tree topology.
+        :param MAP: boolean (default False) whether to regularize or not.
+        :return: the unrooted tree likelihood Pr(T^u).
+        """
         return np.sum(self._bn_estimate_fast(tree, MAP).values())
 
-    # Calculates the KL-Divergence of the different SBN backends relative to truth
     def kl_div(self, method='all', MAP=False):
+        """Calculates the KL-Divergence of the different SBN backends relative to truth.
+
+        :param method: string denoting which method to train the SBN.
+        Options are 'ccd': conditional clade distribution;
+        'bn': conditional probability distributions, i.e. subsplit probabilities;
+        'freq': empirical distribution;
+        'all': all of the above.
+        :param MAP: boolean (default False) whether to regularize or not.
+        :return: dictionary mapping method to value of KL-divergence.
+        """
         kl_div = defaultdict(float)
         for tree, wts in self.emp_tree_freq.iteritems():
             if method in ['ccd', 'all']:
