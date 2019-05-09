@@ -226,37 +226,40 @@ class SBN:
                 # Orientations 1,2,3: node is child subsplit, node.up
                 # is in the direction of the root subsplit.
                 if not node.is_leaf():
-                    # Given nodetobitMap[node], this well-defines
+                    # Given nodetobitMap[node], this bitarray well-defines
                     # the subsplit at node
                     bipart_bitarr = min([nodetobitMap[child] for child in node.children])
                     for sister in node.get_sisters():
                         # Orientation 1
-                        # If root subsplit is beyond node.up, this
+                        # If root subsplit is beyond node.up, this composite bitarray
                         # well-defines the parent subsplit at node.up.
                         comb_parent_bipart_bitarr = nodetobitMap[sister] + nodetobitMap[node]
                         self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] += node_wts
                     if not node.up.is_root():
                         # Orientation 2
-                        # If root subsplit is linked via a sister, this
+                        # If root subsplit is linked via a sister, this composite bitarray
                         # well-defines the parent subsplit at node.up.
                         comb_parent_bipart_bitarr = ~nodetobitMap[node.up] + nodetobitMap[node]
                         self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] += node_wts
 
                     # Orientation 3
                     # If root subsplit is on the edge between node and
-                    # node.up, this well-defines the root split.
+                    # node.up, this composite bitarray well-defines the root split.
                     comb_parent_bipart_bitarr = ~nodetobitMap[node] + nodetobitMap[node]
                     self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] += node_wts
 
                 # Orientations 4,5,6: node.up is child subsplit, node
                 # is in the direction of the root subsplit.
+                # With the root split "below" node,
+                # this bitarray well-defines the subsplit at node.up
+                # NB: Despite the "+" below, bipart_pitarray is NOT a composite bitarray.
                 if not node.up.is_root():
                     bipart_bitarr = min([nodetobitMap[sister] for sister in node.get_sisters()] + [~nodetobitMap[node.up]])
                 else:
                     bipart_bitarr = min([nodetobitMap[sister] for sister in node.get_sisters()])
                 if not node.is_leaf():
                     # Orientations 4 and 5
-                    # If root subsplit is beyond node's children, this
+                    # If root subsplit is beyond node's children, this composite bitarray
                     # well-defines the parent subsplit at node.
                     for child in node.children:
                         comb_parent_bipart_bitarr = nodetobitMap[child] + ~nodetobitMap[node]
@@ -264,7 +267,7 @@ class SBN:
 
                 # Orientation 6
                 # If root subsplit is on the edge between node.up and
-                # node, this well-defines the root split.
+                # node, this composite bitarray well-defines the root split.
                 comb_parent_bipart_bitarr = nodetobitMap[node] + ~nodetobitMap[node]
                 self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] += node_wts
 
