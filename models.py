@@ -1,3 +1,12 @@
+"""
+Assume standard total order on bitarrays.
+
+Composite bitarray represents a subsplit.
+"Decompose" composite bitarray means to cut it into two.
+
+"""
+
+
 import numpy as np
 from collections import defaultdict
 from bitarray import bitarray
@@ -28,10 +37,16 @@ class SBN:
 
         # Dictionary mostly containing joint parent clade-child subsplit data
         # Used to calculate Pr(child subsplit | parent clade) = CCD probs.
+        # It is a double dictionary, such that clade_bipart_dict[w][y] accesses
+        # the relevant value for the subsplit (y, w - y).
         self.clade_bipart_dict = defaultdict(lambda: defaultdict(float))
 
-        # Dictionary mostly containing
+        # Dictionary mostly containing joint parent subsplit-child subsplit data
         # Used to calculate Pr(child subsplit | parent subsplit) = CPD probs.
+        # This is also a double dictionary, such that clade_double_bipart_dict[s][y]
+        # where s is a composite bitarray representing the parent subsplit, and
+        # %EM second?
+        # y splits the second component of the parent subsplit.
         self.clade_double_bipart_dict = defaultdict(lambda: defaultdict(float))
 
         self.clade_freq_est = defaultdict(float)
@@ -51,7 +66,7 @@ class SBN:
             return arrB + arrA
 
     def _merge_bitarr(self, key):
-        """OR a composite bitarray, i.e. merge a split into its parent clade.
+        """OR a composite bitarray, i.e. merge a subsplit into its parent clade.
 
         :param key: string of 0s and 1s representing a composite bitarray.
         :return: bitarray representing the OR of the two sub-bitarrays.
@@ -59,7 +74,7 @@ class SBN:
         return bitarray(key[:self.ntaxa]) | bitarray(key[self.ntaxa:])
 
     def _decomp_minor_bitarr(self, key):
-        """Decomposes a composite bitarray and returns the lesser bitarray.
+        """Decomposes a composite bitarray (passed as a character string) and returns the lesser of the two resulting bitarrays.
 
         :param key: string of 0s and 1s representing a composite bitarray.
         :return: bitarray representing the lesser of the two sub-bitarrays.
@@ -67,7 +82,7 @@ class SBN:
         return min(bitarray(key[:self.ntaxa]), bitarray(key[self.ntaxa:]))
 
     def _minor_bitarr(self, arrA):
-        """Symmetry collapse by returning the lesser of the bitarray and its inverse.
+        """Symmetry collapse by returning the lesser of the bitarray and its complement.
 
         :param arrA: bitarray representing a split.
         :return: bitarray containing arrA or its NOT, whichever is lesser.
@@ -86,7 +101,9 @@ class SBN:
         return bitarray(''.join(bit_list))
 
     def check_clade_dict(self):
-        """Check summary statistics for each clade/split."""
+        """Check summary statistics for each clade/split.
+        %EM I don't actually know what these summary statistics might be. Also, it looks like this is printing rather than actually checking anything.
+        """
         print "clade_dict sum: {:.12f}".format(sum(self.clade_dict.values()))
         print "clade_bipart_dict tabular sum:"
         for key in self.clade_bipart_dict:
@@ -94,7 +111,8 @@ class SBN:
             print '{}:{:.12f}|{:.12f}'.format(bipart_bitarr.to01(), sum(self.clade_bipart_dict[key].values()), self.clade_dict[bipart_bitarr.to01()])
 
     def check_clade_dict_em(self):
-        """Check the validity of weighted frequency tables used in EM."""
+        """Check the validity of weighted frequency tables used in EM.
+        %EM Namely, we'd like to know if things sum up to 1?"""
         print "clade_dict sum: {:.12f}".format(sum(self.clade_dict.values()))
         print "clade_double_bipart_dict tabular sum:"
         for key in self.clade_double_bipart_dict:
@@ -109,6 +127,7 @@ class SBN:
 
     def logprior(self):
         """Calculate the Dirichlet conjugate prior.
+        %EM It's not immediately clear to me what the prior is evaluated on...
 
         :return: float containing the value of the prior.
         """
@@ -187,8 +206,15 @@ class SBN:
                 # NB: tree topology is unrooted, but is stored in a
                 # rooted tree format (with a trifurcating root).
                 if not node.up.is_root():
+                    # This is the standard case in the middle of the ETE tree.
+                    # The first term is a singleton list (the single sister)
+                    # and the second is the rest of the tree that is above
+                    # node.up.
                     bipart_bitarr = min([nodetobitMap[sister] for sister in node.get_sisters()] + [~nodetobitMap[node.up]])
                 else:
+                    # This is the case that the parent is the the ETE data
+                    # structure root, so the split is between the two sisters
+                    # of node.
                     bipart_bitarr = min([nodetobitMap[sister] for sister in node.get_sisters()])
                 self.clade_bipart_dict[(~nodetobitMap[node]).to01()][bipart_bitarr.to01()] += wts / (2 * self.ntaxa - 3.0)
 
