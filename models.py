@@ -1,9 +1,9 @@
 """
-Assume standard total order on bitarrays.
+Notes:
 
+Assume standard total order on bitarrays.
 Composite bitarray represents a subsplit.
 "Decompose" composite bitarray means to cut it into two.
-
 """
 
 
@@ -45,7 +45,6 @@ class SBN:
         # Used to calculate Pr(child subsplit | parent subsplit) = CPD probs.
         # This is also a double dictionary, such that clade_double_bipart_dict[s][y]
         # where s is a composite bitarray representing the parent subsplit, and
-        # %EM second?
         # y splits the second component of the parent subsplit.
         self.clade_double_bipart_dict = defaultdict(lambda: defaultdict(float))
 
@@ -174,11 +173,12 @@ class SBN:
         return nodetobitMap
 
     def ccd_dict_update(self, tree, wts):
-        """Updates conditional clade distribution (CCD).
+        """Updates conditional clade distribution (CCD) with a single topology.
 
-        Updates the CCD dictionary, based on a single tree topology,
-        weighted by the fraction of times that tree appears in the
-        sample or distribution.
+        Updates the CCD dictionary, based on a single unrooted tree topology,
+        weighted by the fraction of times that tree appears in the sample or
+        distribution. This function does the updating for all rootings of the
+        unrooted tree simultaneously.
 
         :param tree: Tree (ete3) unrooted tree object providing the topology.
         :param wts: float representing the fraction of the sampled trees that
@@ -188,7 +188,7 @@ class SBN:
         nodetobitMap = self.clade_update(tree, wts)
         for node in tree.traverse('levelorder'):
             # Updates the conditional clade distribution (CCD)
-            # weights.
+            # weights for all rootings.
             # Notation: Node and the edge 'above' it are equivalent.
             # Explores the two orientations of subsplit that this node
             # can take, and updates the CCD dictionary.
@@ -203,7 +203,7 @@ class SBN:
                 # Orientation 2
                 # Root node is 'below' node, so node's subsplit
                 # splits its 'sister' and/or 'parent' clades.
-                # NB: tree topology is unrooted, but is stored in a
+                # NB: the unrooted tree topology is stored in a
                 # rooted tree format (with a trifurcating root).
                 if not node.up.is_root():
                     # This is the standard case in the middle of the ETE tree.
@@ -225,6 +225,7 @@ class SBN:
 
         Updates the CPD dictionary, based on a single tree topology,
         weighted by the number of times that tree appears in the
+        %EM above it's "sample or distribution" and here "greater sample". Pick one.
         greater sample.
 
         :param tree: Tree (ete3) unrooted tree object providing the topology.
@@ -279,6 +280,7 @@ class SBN:
                 # With the root split "below" node,
                 # this bitarray well-defines the subsplit at node.up
                 # NB: Despite the "+" below, bipart_pitarray is NOT a composite bitarray.
+                # %EM IIUC he's just using that as a way to get a min, right?
                 if not node.up.is_root():
                     bipart_bitarr = min([nodetobitMap[sister] for sister in node.get_sisters()] + [~nodetobitMap[node.up]])
                 else:
@@ -299,6 +301,9 @@ class SBN:
 
     def ccd_train_count(self, tree_count, tree_id):
         """Trains SBN with conditional clade distributions from sample trees.
+
+        %EM IIUC here it's getting the rooted SBN probabilities for all the rootings, rather than doing any EM training. If so, let's make a note here.
+        %EM I also found the "with" in this title confusing. Isn't it initializing the conditional clade distributions of the SBN with the sample trees? Phrasing it in this way would make the purpose of bn_train_count a little more clear IMHO.
 
         :param tree_count: dictionary mapping tree topology ID to count
         of that tree in the sample.
@@ -342,6 +347,7 @@ class SBN:
         :param tree_id: dictionary mapping tree topology ID to a
         singleton list containing the tree object.
         """
+        # %EM Equivalent lines appear in the previous two functions. I'd prefer to have these comments the first time they appear.
         # Clear the SBN model dictionaries
         self.clade_dict = defaultdict(float)
         self.clade_bipart_dict = defaultdict(lambda: defaultdict(float))
@@ -393,7 +399,7 @@ class SBN:
 
         :param tree: Tree (ete3) topology and edge lengths.
         :param bipart_bitarr_prob: Dictionary mapping each node (via to01())
-        to the likelihood of the tree joint with rooting at that node.
+        to the SBN likelihood of the tree joint with rooting at that node.
         :param nodetobitMap: Cached dictionary mapping each node to
         the bitarray representation of its descendant leaves.
         :return: tuple (root_prob, cum_root_prob, normalizing_const),
@@ -574,9 +580,11 @@ class SBN:
             for i, tree_name in enumerate(tree_names):
                 tree = tree_dict[tree_name]
                 wts = tree_wts[i]
+                # %EM Are we getting all the way to an E step here? It seems like we're preparing the way for the E step-- we don't get the conditional likelihoods just yet. They are given by bn_em_root_prob, I think?
                 # E-step
                 bipart_bitarr_prob = self._bn_estimate_fast(tree, MAP)
-                # update the weigted frequency counts
+                # %EM I don't follow the following comment.
+                # Update the weighted frequency counts.
                 est_prob = self.bn_dict_em_update(tree, wts, bipart_bitarr_prob, clade_dict, clade_bipart_dict, clade_double_bipart_dict)
                 curr_logp += wts * np.log(est_prob)
 
@@ -651,6 +659,7 @@ class SBN:
     def get_clade_bipart(self):
         """Gets a copy of clade dictionaries.
 
+        %EM Do we have a way of flagging things to ask Cheng? This should make the list!
         Commenter's Note: This is not symmetric with set_clade_bipart, possibly typo or not updated?
 
         :return: tuple containing a dictionary of root split
@@ -773,7 +782,8 @@ class SBN:
     # TODO: Maybe switch to log-addition instead of linear-multiplication
     # Regularization linear-addition might present an obstacle
     def _bn_estimate_fast(self, tree, MAP=False):
-        """Two-pass algorithm for calculating likelihood on an edge by edge basis.
+        """Two-pass algorithm for calculating rooted SBN likelihoods for all
+        rootings of a given unrooted tree.
 
         :param tree: Tree (ete3) containing tree topology.
         :param MAP: boolean (default False) whether to regularize or not.
