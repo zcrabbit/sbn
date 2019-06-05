@@ -225,8 +225,7 @@ class SBN:
 
         Updates the CPD dictionary, based on a single tree topology,
         weighted by the number of times that tree appears in the
-        %EM above it's "sample or distribution" and here "greater sample". Pick one.
-        greater sample.
+        sample or distribution.
 
         :param tree: Tree (ete3) unrooted tree object providing the topology.
         :param wts: float representing the fraction of the sampled trees that
@@ -279,8 +278,9 @@ class SBN:
                 # is in the direction of the root subsplit.
                 # With the root split "below" node,
                 # this bitarray well-defines the subsplit at node.up
-                # NB: Despite the "+" below, bipart_pitarray is NOT a composite bitarray.
+                # NB: the "+" is list concatenation, not bitarray concatenation.
                 # %EM IIUC he's just using that as a way to get a min, right?
+                # %MK Yes, it's "+" as list concatenation, but I wanted to leave a note to future readers (clarified).
                 if not node.up.is_root():
                     bipart_bitarr = min([nodetobitMap[sister] for sister in node.get_sisters()] + [~nodetobitMap[node.up]])
                 else:
@@ -300,16 +300,18 @@ class SBN:
                 self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] += node_wts
 
     def ccd_train_count(self, tree_count, tree_id):
-        """Trains SBN with conditional clade distributions from sample trees.
+        """Extracts the conditional clade distributions from sample trees and stores them in the SBN object.
 
         %EM IIUC here it's getting the rooted SBN probabilities for all the rootings, rather than doing any EM training. If so, let's make a note here.
         %EM I also found the "with" in this title confusing. Isn't it initializing the conditional clade distributions of the SBN with the sample trees? Phrasing it in this way would make the purpose of bn_train_count a little more clear IMHO.
+        %MK Addressed?
 
         :param tree_count: dictionary mapping tree topology ID to count
         of that tree in the sample.
         :param tree_id: dictionary mapping tree topology ID to a
         singleton list containing the tree object.
         """
+        # Clear the SBN model dictionaries
         self.clade_dict = defaultdict(float)
         self.clade_bipart_dict = defaultdict(lambda: defaultdict(float))
         total_count = sum(tree_count.values()) * 1.0
@@ -321,13 +323,14 @@ class SBN:
             self.ccd_dict_update(tree, wts)
 
     def ccd_train_prob(self, tree_dict, tree_names, tree_wts):
-        """Trains SBN with conditional clade distributions from tree probabilities.
+        """Extracts the conditional clade distributions from tree probabilities and stores them in the SBN object.
 
         :param tree_dict: dictionary mapping tree topology ID to count
         of that tree in the sample.
         :param tree_names: list of tree topology IDs.
         :param tree_wts: list of tree probabilities.
         """
+        # Clear the SBN model dictionaries
         self.clade_dict = defaultdict(float)
         self.clade_bipart_dict = defaultdict(lambda: defaultdict(float))
         for i, tree_name in enumerate(tree_names):
@@ -339,8 +342,9 @@ class SBN:
     def bn_train_count(self, tree_count, tree_id):
         """Trains SBN with conditional probability distributions from sample trees.
 
-        Commenter note: I might have the name "conditional probability
-        distributions" wrong--it's using subsplit probabilities
+        MK: I might have the name "conditional probability
+        distributions" wrong--it's using parent-child subsplit pair
+        probabilities.
 
         :param tree_count: dictionary mapping tree topology ID to count
         of that tree in the sample.
@@ -348,6 +352,7 @@ class SBN:
         singleton list containing the tree object.
         """
         # %EM Equivalent lines appear in the previous two functions. I'd prefer to have these comments the first time they appear.
+        # %MK Addressed
         # Clear the SBN model dictionaries
         self.clade_dict = defaultdict(float)
         self.clade_bipart_dict = defaultdict(lambda: defaultdict(float))
@@ -371,14 +376,16 @@ class SBN:
     def bn_train_prob(self, tree_dict, tree_names, tree_wts):
         """Trains SBN with conditional probability distributions from tree probabilities.
 
-        Commenter note: I might have the name "conditional probability
-        distributions" wrong--it's using subsplit probabilities
+        MK: I might have the name "conditional probability
+        distributions" wrong--it's using parent-child subsplit pair
+        probabilities.
 
         :param tree_dict: dictionary mapping tree topology ID to count
         of that tree in the sample.
         :param tree_names: list of tree topology IDs.
         :param tree_wts: list of tree probabilities.
         """
+        # Clear the SBN model dictionaries
         self.clade_dict = defaultdict(float)
         self.clade_bipart_dict = defaultdict(lambda: defaultdict(float))
         self.clade_double_bipart_dict = defaultdict(lambda: defaultdict(float))
@@ -551,7 +558,8 @@ class SBN:
     def bn_em_prob(self, tree_dict, tree_names, tree_wts, maxiter=100, miniter=50, abstol=1e-04, monitor=False, MAP=False):
         """Run EM-algorithm on a set of unrooted tree probability data.
 
-        For theory and comments, see Generalizing Tree Probability Estimation via Bayesian Networks, Zhang & Matsen
+        For theory and comments, see "Generalizing Tree Probability Estimation
+        via Bayesian Networks", Zhang & Matsen
 
         :param tree_dict: Dictionary where keys are tree topology IDs
         and the values are integers representing how many times that
@@ -581,9 +589,11 @@ class SBN:
                 tree = tree_dict[tree_name]
                 wts = tree_wts[i]
                 # %EM Are we getting all the way to an E step here? It seems like we're preparing the way for the E step-- we don't get the conditional likelihoods just yet. They are given by bn_em_root_prob, I think?
+                # %MK These are Cheng-original comments, so I left them in place.
                 # E-step
                 bipart_bitarr_prob = self._bn_estimate_fast(tree, MAP)
                 # %EM I don't follow the following comment.
+                # %MK These are Cheng-original comments, so I left them in place.
                 # Update the weighted frequency counts.
                 est_prob = self.bn_dict_em_update(tree, wts, bipart_bitarr_prob, clade_dict, clade_bipart_dict, clade_double_bipart_dict)
                 curr_logp += wts * np.log(est_prob)
@@ -604,7 +614,8 @@ class SBN:
     def bn_em_count(self, tree_count, tree_id, maxiter=100, miniter=50, abstol=1e-04, monitor=False, MAP=False):
         """Run EM-algorithm on a set of unrooted tree count data.
 
-        For theory and comments, see Generalizing Tree Probability Estimation via Bayesian Networks, Zhang & Matsen
+        For theory and comments, see "Generalizing Tree Probability Estimation
+        via Bayesian Networks", Zhang & Matsen
 
         :param tree_count: Dictionary where keys are tree topology IDs
         and the values are integers representing how many times that
@@ -659,8 +670,11 @@ class SBN:
     def get_clade_bipart(self):
         """Gets a copy of clade dictionaries.
 
+        %MK: This is not symmetric with set_clade_bipart, possibly typo or not updated?
         %EM Do we have a way of flagging things to ask Cheng? This should make the list!
-        Commenter's Note: This is not symmetric with set_clade_bipart, possibly typo or not updated?
+        %MK I am having trouble finding an equivalent function in VBPI,
+        and I did not see this function used at all in the `experiments` notebooks,
+        so I think it may have been resolved (through excision) between SBN->VBPI.
 
         :return: tuple containing a dictionary of root split
         probabilities and a dictionary of dictionaries containing clade
@@ -681,7 +695,7 @@ class SBN:
         self.clade_dict, self.clade_bipart_dict, self.clade_double_bipart_dict = deepcopy(clade_dict), deepcopy(clade_bipart_dict), deepcopy(
             clade_double_bipart_dict)
 
-    # TODO: Maybe switch to log-addition instead of linear-multiplication
+    # %MK VBPI appears to switch to log-addition rather than linear-multiplication
     def ccd_estimate(self, tree, unrooted=True):
         """Calculate tree (rooted or unrooted) likelihood using clade conditional distibutions.
 
@@ -727,7 +741,7 @@ class SBN:
 
         return (2 * self.ntaxa - 3.0) * ccd_est
 
-    # TODO: Maybe switch to log-addition instead of linear-multiplication
+    # %MK VBPI appears to switch to log-addition rather than linear-multiplication
     def bn_estimate_rooted(self, tree, MAP=False):
         """Calculate rooted tree likelihood using subsplit distributions.
 
@@ -779,7 +793,7 @@ class SBN:
 
         return bn_est
 
-    # TODO: Maybe switch to log-addition instead of linear-multiplication
+    # %MK VBPI appears to switch to log-addition rather than linear-multiplication
     # Regularization linear-addition might present an obstacle
     def _bn_estimate_fast(self, tree, MAP=False):
         """Two-pass algorithm for calculating rooted SBN likelihoods for all
