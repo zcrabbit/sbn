@@ -7,10 +7,10 @@ Shall we come up with a name parent-child subsplit pair probabilities? Just use 
 
 Notes:
 * Assume the standard total order on bitarrays.
-%EM MK can you finish of the below sentence?
-* A "composite" bitarray represents a subsplit. Say we have n taxa, and a well-defined parent node and child node.
-    The first n bits represent the clade of the child node's sister (the parent node's other child)
-    and the second n bits represent the clade of the child node itself.
+* A "composite" bitarray represents a subsplit. Say we have n taxa, and a
+  well-defined parent node and child node. The first n bits represent the clade
+  of the child node's sister (the parent node's other child) and the second n
+  bits represent the clade of the child node itself.
 * To "decompose" a composite bitarray means to cut it into two.
 """
 
@@ -116,6 +116,7 @@ class SBN:
         clade_dict[clade] (clade probabilities) which should be equal.
         %EM I don't actually know what these summary statistics might be. Also, it looks like this is printing rather than actually checking anything.
         %MK Addressed?  Re: checking vs. printing, I'm defaulting to the function name language, since I can understand printing so that the user can check things as semantically correct.
+        %EM I do see your point but have the opposite opinion. The user can already read the function name. The first line of the docstring gives an opportunity to give different information. If I've convinced you, please change.
         """
         print "clade_dict sum: {:.12f}".format(sum(self.clade_dict.values()))
         print "clade_bipart_dict tabular sum:"
@@ -132,8 +133,7 @@ class SBN:
         next to clade_dict[subsplit] (if it is at the root) or
         clade_bipart_dict[union(subsplit)][subsplit] (if it is not at the root)
         which should be equal.
-        %EM Namely, we'd like to know if things sum up to 1?
-        %MK Adressed?"""
+        """
         print "clade_dict sum: {:.12f}".format(sum(self.clade_dict.values()))
         print "clade_double_bipart_dict tabular sum:"
         for key in self.clade_double_bipart_dict:
