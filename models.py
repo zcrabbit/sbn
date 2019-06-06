@@ -1,13 +1,13 @@
 """
 
-
+Discussion:
 Shall we come up with a name parent-child subsplit pair probabilities? Just use "BN probabilities"?
 
 Notes:
-
-Assume standard total order on bitarrays.
-Composite bitarray represents a subsplit.
-"Decompose" composite bitarray means to cut it into two.
+* Assume the standard total order on bitarrays.
+%EM MK can you finish of the below sentence?
+* A "composite" bitarray represents a subsplit. Say we have n taxa. The first n bits represent...
+* To "decompose" a composite bitarray means to cut it into two.
 """
 
 
@@ -303,7 +303,6 @@ class SBN:
 
     def ccd_train_count(self, tree_count, tree_id):
         """Extracts the conditional clade distributions from sample trees and stores them in the SBN object.
-
 
         :param tree_count: dictionary mapping tree topology ID to count
         of that tree in the sample.
