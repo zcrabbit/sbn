@@ -42,7 +42,7 @@ class SBN:
         self.clade_bipart_dict = defaultdict(lambda: defaultdict(float))
 
         # Dictionary mostly containing joint parent subsplit-child subsplit data
-        # Used to calculate Pr(child subsplit | parent subsplit) = CPD probs.
+        # Used to calculate Pr(child subsplit | parent subsplit) = CSD probs.
         # This is also a double dictionary, such that clade_double_bipart_dict[s][y]
         # where s is a composite bitarray representing the parent subsplit, and
         # y splits the second component of the parent subsplit.
@@ -101,7 +101,13 @@ class SBN:
 
     def check_clade_dict(self):
         """Check summary statistics for each clade/split.
+
+        Shows the sum of the root split probability dictionary,
+        which should be 1.0.  For each clade, shows the sum of
+        clade_bipart_dict[clade][.] (sum of subsplit probabilities) next to
+        clade_dict[clade] (clade probabilities) which should be equal.
         %EM I don't actually know what these summary statistics might be. Also, it looks like this is printing rather than actually checking anything.
+        %MK Addressed?  Re: checking vs. printing, I'm defaulting to the function name language, since I can understand printing so that the user can check things as semantically correct.
         """
         print "clade_dict sum: {:.12f}".format(sum(self.clade_dict.values()))
         print "clade_bipart_dict tabular sum:"
@@ -111,22 +117,33 @@ class SBN:
 
     def check_clade_dict_em(self):
         """Check the validity of weighted frequency tables used in EM.
-        %EM Namely, we'd like to know if things sum up to 1?"""
+
+        Shows the sum of the root split probability dictionary,
+        which should be 1.0.  For each subsplit, shows the sum of
+        clade_double_bipart_dict[subsplit][.] (parent-child subsplit probabilities)
+        next to clade_dict[subsplit] (if it is at the root) or
+        clade_bipart_dict[union(subsplit)][subsplit] (if it is not at the root)
+        which should be equal.
+        %EM Namely, we'd like to know if things sum up to 1?
+        %MK Adressed?"""
         print "clade_dict sum: {:.12f}".format(sum(self.clade_dict.values()))
         print "clade_double_bipart_dict tabular sum:"
         for key in self.clade_double_bipart_dict:
             parent_clade_bitarr = self._merge_bitarr(key)
             bipart_bitarr = self._decomp_minor_bitarr(key)
             if parent_clade_bitarr.count() != self.ntaxa:
-                print '{}|{}:{:.12f}|{:.12f}'.format(parent_clade_bitarr.to01(), bipart_bitarr.to01(), sum(
-                    self.clade_double_bipart_dict[key].values()), self.clade_bipart_dict[parent_clade_bitarr.to01()][bipart_bitarr.to01()])
+                print '{}|{}:{:.12f}|{:.12f}'.format(parent_clade_bitarr.to01(), bipart_bitarr.to01(),
+                                                     sum(self.clade_double_bipart_dict[key].values()),
+                                                     self.clade_bipart_dict[parent_clade_bitarr.to01()][bipart_bitarr.to01()])
             else:
                 print '{}|{}:{:.12f}|{:.12f}'.format(parent_clade_bitarr.to01(), bipart_bitarr.to01(),
-                                                     sum(self.clade_double_bipart_dict[key].values()), self.clade_dict[bipart_bitarr.to01()])
+                                                     sum(self.clade_double_bipart_dict[key].values()),
+                                                     self.clade_dict[bipart_bitarr.to01()])
 
     def logprior(self):
         """Calculate the Dirichlet conjugate prior.
         %EM It's not immediately clear to me what the prior is evaluated on...
+        %MK I think this one goes in the "Ask Cheng" list.
 
         :return: float containing the value of the prior.
         """
@@ -221,9 +238,9 @@ class SBN:
         return nodetobitMap
 
     def bn_dict_update(self, tree, wts, root_wts=None):
-        """Updates conditional probability distribution (CPD).
+        """Updates conditional subsplit distribution (CSD).
 
-        Updates the CPD dictionary, based on a single tree topology,
+        Updates the CSD dictionary, based on a single tree topology,
         weighted by the number of times that tree appears in the
         sample or distribution.
 
@@ -243,11 +260,11 @@ class SBN:
                 # Weighted edges, used in SBN-EM and SBN-EM-alpha
                 node_wts = wts * root_wts[nodetobitMap[node].to01()]
 
-            # Updates the conditional probability distribution (CPD)
+            # Updates the conditional subsplit distribution (CSD)
             # weights.
             # Notation: Node and the edge 'above' it are equivalent.
             # Explores the six orientations that this (node, node.up)
-            # pair can take, and updates the CPD dictionaries.
+            # pair can take, and updates the CSD dictionaries.
             if not node.is_root():
                 # Orientations 1,2,3: node is child subsplit, node.up
                 # is in the direction of the root subsplit.
@@ -340,11 +357,7 @@ class SBN:
             self.ccd_dict_update(tree, wts)
 
     def bn_train_count(self, tree_count, tree_id):
-        """Trains SBN with conditional probability distributions from sample trees.
-
-        MK: I might have the name "conditional probability
-        distributions" wrong--it's using parent-child subsplit pair
-        probabilities.
+        """Extracts the conditional subsplit distributions (CSDs) from sample trees and stores them in the SBN object.
 
         :param tree_count: dictionary mapping tree topology ID to count
         of that tree in the sample.
@@ -374,11 +387,7 @@ class SBN:
             self.clade_double_bipart_len[key] = len(self.clade_double_bipart_dict[key])
 
     def bn_train_prob(self, tree_dict, tree_names, tree_wts):
-        """Trains SBN with conditional probability distributions from tree probabilities.
-
-        MK: I might have the name "conditional probability
-        distributions" wrong--it's using parent-child subsplit pair
-        probabilities.
+        """Extracts the conditional subsplit distributions (CSDs) from tree probabilities and stores them in the SBN object.
 
         :param tree_dict: dictionary mapping tree topology ID to count
         of that tree in the sample.
@@ -411,10 +420,10 @@ class SBN:
         the bitarray representation of its descendant leaves.
         :return: tuple (root_prob, cum_root_prob, normalizing_const),
         where root_prob is a dictionary mapping each node to
-        the conditional probability distribution of rooting at that node
+        the conditional subsplit distribution (CSD) of rooting at that node
         given the unrooted tree,
         cum_root_prob is a dictionary mapping each node to
-        the conditional probability distribution of rooting at _or below_
+        the conditional subsplit distribution (CSD) of rooting at _or below_
         that node given the unrooted tree,
         and normalizing_const is the probability/likelihood of the
         unrooted tree.
@@ -675,6 +684,7 @@ class SBN:
         %MK I am having trouble finding an equivalent function in VBPI,
         and I did not see this function used at all in the `experiments` notebooks,
         so I think it may have been resolved (through excision) between SBN->VBPI.
+        $MK "Ask Cheng" candidate.
 
         :return: tuple containing a dictionary of root split
         probabilities and a dictionary of dictionaries containing clade
@@ -975,7 +985,7 @@ class SBN:
 
         :param method: string denoting which method to train the SBN.
         Options are 'ccd': conditional clade distribution;
-        'bn': conditional probability distributions, i.e. subsplit probabilities;
+        'bn': conditional subsplit distributions, i.e. child subsplit conditional probabilities given parent subsplit;
         'freq': empirical distribution;
         'all': all of the above.
         :param MAP: boolean (default False) whether to regularize or not.
