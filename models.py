@@ -1,5 +1,4 @@
 """
-
 Discussion:
 Shall we come up with a name parent-child subsplit pair probabilities? Just use "BN probabilities"?
 %MK For the conditional probabilities, (child subsplit | parent subsplit) I think we brainstormed "conditional subsplit distributions".
@@ -114,10 +113,6 @@ class SBN:
         which should be 1.0.  For each clade, shows the sum of
         clade_bipart_dict[clade][.] (sum of subsplit probabilities) next to
         clade_dict[clade] (clade probabilities) which should be equal.
-        %EM I don't actually know what these summary statistics might be. Also, it looks like this is printing rather than actually checking anything.
-        %MK Addressed?  Re: checking vs. printing, I'm defaulting to the function name language, since I can understand printing so that the user can check things as semantically correct.
-        %EM I do see your point but have the opposite opinion. The user can already read the function name. The first line of the docstring gives an opportunity to give different information. If I've convinced you, please change.
-        %MK Point taken! I think I have a good candidate first line for this function and the next.
         """
         print "clade_dict sum: {:.12f}".format(sum(self.clade_dict.values()))
         print "clade_bipart_dict tabular sum:"
