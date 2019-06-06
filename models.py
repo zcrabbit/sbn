@@ -1,9 +1,13 @@
 """
-Notes:
 
-Assume standard total order on bitarrays.
-Composite bitarray represents a subsplit.
-"Decompose" composite bitarray means to cut it into two.
+Discussion:
+Shall we come up with a name parent-child subsplit pair probabilities? Just use "BN probabilities"?
+
+Notes:
+* Assume the standard total order on bitarrays.
+%EM MK can you finish of the below sentence?
+* A "composite" bitarray represents a subsplit. Say we have n taxa. The first n bits represent...
+* To "decompose" a composite bitarray means to cut it into two.
 """
 
 
@@ -296,8 +300,6 @@ class SBN:
                 # With the root split "below" node,
                 # this bitarray well-defines the subsplit at node.up
                 # NB: the "+" is list concatenation, not bitarray concatenation.
-                # %EM IIUC he's just using that as a way to get a min, right?
-                # %MK Yes, it's "+" as list concatenation, but I wanted to leave a note to future readers (clarified).
                 if not node.up.is_root():
                     bipart_bitarr = min([nodetobitMap[sister] for sister in node.get_sisters()] + [~nodetobitMap[node.up]])
                 else:
@@ -318,10 +320,6 @@ class SBN:
 
     def ccd_train_count(self, tree_count, tree_id):
         """Extracts the conditional clade distributions from sample trees and stores them in the SBN object.
-
-        %EM IIUC here it's getting the rooted SBN probabilities for all the rootings, rather than doing any EM training. If so, let's make a note here.
-        %EM I also found the "with" in this title confusing. Isn't it initializing the conditional clade distributions of the SBN with the sample trees? Phrasing it in this way would make the purpose of bn_train_count a little more clear IMHO.
-        %MK Addressed?
 
         :param tree_count: dictionary mapping tree topology ID to count
         of that tree in the sample.
@@ -364,8 +362,6 @@ class SBN:
         :param tree_id: dictionary mapping tree topology ID to a
         singleton list containing the tree object.
         """
-        # %EM Equivalent lines appear in the previous two functions. I'd prefer to have these comments the first time they appear.
-        # %MK Addressed
         # Clear the SBN model dictionaries
         self.clade_dict = defaultdict(float)
         self.clade_bipart_dict = defaultdict(lambda: defaultdict(float))
