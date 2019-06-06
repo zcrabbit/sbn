@@ -2,11 +2,15 @@
 
 Discussion:
 Shall we come up with a name parent-child subsplit pair probabilities? Just use "BN probabilities"?
+%MK For the conditional probabilities, (child subsplit | parent subsplit) I think we brainstormed "conditional subsplit distributions".
+    For the content of clade_double_bipart_dict[.][.] which is joint (child subsplit, parent subsplit) but doesn't sum to 1.0, I don't have a candidate yet.
 
 Notes:
 * Assume the standard total order on bitarrays.
 %EM MK can you finish of the below sentence?
-* A "composite" bitarray represents a subsplit. Say we have n taxa. The first n bits represent...
+* A "composite" bitarray represents a subsplit. Say we have n taxa, and a well-defined parent node and child node.
+    The first n bits represent the clade of the child node's sister (the parent node's other child)
+    and the second n bits represent the clade of the child node itself.
 * To "decompose" a composite bitarray means to cut it into two.
 """
 
