@@ -108,7 +108,7 @@ class SBN:
         return bitarray(''.join(bit_list))
 
     def check_clade_dict(self):
-        """Check summary statistics for each clade/split.
+        """Print and compare summary statistics for each clade.
 
         Shows the sum of the root split probability dictionary,
         which should be 1.0.  For each clade, shows the sum of
@@ -117,6 +117,7 @@ class SBN:
         %EM I don't actually know what these summary statistics might be. Also, it looks like this is printing rather than actually checking anything.
         %MK Addressed?  Re: checking vs. printing, I'm defaulting to the function name language, since I can understand printing so that the user can check things as semantically correct.
         %EM I do see your point but have the opposite opinion. The user can already read the function name. The first line of the docstring gives an opportunity to give different information. If I've convinced you, please change.
+        %MK Point taken! I think I have a good candidate first line for this function and the next.
         """
         print "clade_dict sum: {:.12f}".format(sum(self.clade_dict.values()))
         print "clade_bipart_dict tabular sum:"
@@ -125,7 +126,7 @@ class SBN:
             print '{}:{:.12f}|{:.12f}'.format(bipart_bitarr.to01(), sum(self.clade_bipart_dict[key].values()), self.clade_dict[bipart_bitarr.to01()])
 
     def check_clade_dict_em(self):
-        """Check the validity of weighted frequency tables used in EM.
+        """Print and compare summary statistics for each subsplit.
 
         Shows the sum of the root split probability dictionary,
         which should be 1.0.  For each subsplit, shows the sum of
