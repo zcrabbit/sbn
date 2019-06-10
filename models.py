@@ -4,6 +4,8 @@ Shall we come up with a name parent-child subsplit pair probabilities? Just use 
 %MK For the conditional probabilities, (child subsplit | parent subsplit) I think we brainstormed "conditional subsplit distributions".
     For the content of clade_double_bipart_dict[.][.] which is joint (child subsplit, parent subsplit) but doesn't sum to 1.0, I don't have a candidate yet.
 
+%EM Let's use "virtual root".
+
 Notes:
 * Assume the standard total order on bitarrays.
 * Addition on bitarrays is concatenation.
@@ -56,6 +58,7 @@ class SBN:
         # y splits the second component of the parent subsplit.
         self.clade_double_bipart_dict = defaultdict(lambda: defaultdict(float))
 
+        # %EM Erick annotate these.
         self.clade_freq_est = defaultdict(float)
         self.clade_bipart_freq_est = defaultdict(lambda: defaultdict(float))
         self.clade_double_bipart_len = defaultdict(int)
@@ -184,8 +187,7 @@ class SBN:
         """
         nodetobitMap = {}
         for node in tree.traverse('levelorder'):
-            # NB: tree topology is unrooted, but is stored in a
-            # rooted tree format (with a trifurcating root).
+            # NB: tree topology is unrooted, but is stored in a rooted tree format (with a trifurcating root).
             if not node.is_root():
                 clade = node.get_leaf_names()
                 node_bitarr = self.clade_to_bitarr(clade)
@@ -226,6 +228,7 @@ class SBN:
                 if not node.up.is_root():
                     # This is the standard case for this orientation in the middle of the ETE tree. The first term is a
                     # singleton list (the single sister) and the second is the rest of the tree that is above node.up.
+                    # Thus, the "+" is list concatenation, not bitarray concatenation.
                     bipart_bitarr = min([nodetobitMap[sister] for sister in node.get_sisters()] + [~nodetobitMap[node.up]])
                 else:
                     # This is the case that the parent is the the ETE data structure root, so the split is between the
@@ -287,8 +290,6 @@ class SBN:
 
                 # Orientations 4,5,6: node.up is child subsplit, node is in the direction of the root subsplit.
                 # With the root split "below" node, this bitarray well-defines the subsplit at node.up
-                # %EM We already used this sort of thing in the previous function.
-                # NB: the "+" is list concatenation, not bitarray concatenation.
                 if not node.up.is_root():
                     bipart_bitarr = min([nodetobitMap[sister] for sister in node.get_sisters()] + [~nodetobitMap[node.up]])
                 else:
@@ -320,6 +321,7 @@ class SBN:
         self.clade_dict = defaultdict(float)
         self.clade_bipart_dict = defaultdict(lambda: defaultdict(float))
         total_count = sum(tree_count.values()) * 1.0
+        # Iterate through trees and update with corresponding CCD values.
         for key in tree_count:
             count = tree_count[key]
             tree = tree_id[key][0]
@@ -335,7 +337,6 @@ class SBN:
         :param tree_names: list of tree topology IDs.
         :param tree_wts: list of tree probabilities.
         """
-        # Clear the SBN model dictionaries
         self.clade_dict = defaultdict(float)
         self.clade_bipart_dict = defaultdict(lambda: defaultdict(float))
         for i, tree_name in enumerate(tree_names):
@@ -364,6 +365,8 @@ class SBN:
             tree = tree_id[key][0]
 
             wts = count / total_count
+            # Note that by calling bn_dict_update we call clade_update and ccd_dict_update, which update clade_dict,
+            # clade_bipart_dict, and clade_double_bipart_dict.
             self.bn_dict_update(tree, wts)
             self.samp_tree_freq[tree.get_topology_id()] = wts
 
@@ -477,8 +480,7 @@ class SBN:
 
                 if not node.is_leaf():
                     # Orientation 1/2
-                    # Root node is 'above' node, so node's subsplit
-                    # splits its 'child' clades.
+                    # Root node is 'above' node, so node's subsplit splits its 'child' clades.
                     children_bipart_bitarr = min([nodetobitMap[child] for child in node.children])
                     cum_node_wts = wts * (1.0 - cum_root_prob[bipart_bitarr.to01()] + root_prob[bipart_bitarr.to01()])
                     # Update clade_bipart_dict (Orientation 1/2) adding wts * Pr(root @ or above node | T^u)
@@ -495,8 +497,7 @@ class SBN:
 
                         cum_node_wts = wts * cum_root_prob[self._minor_bitarr(nodetobitMap[node.get_sisters()[0]]).to01()]
                         # Orientation 2/6
-                        # If root subsplit is linked via a sister, this
-                        # well-defines the parent subsplit at node.up.
+                        # If root subsplit is linked via a sister, this well-defines the parent subsplit at node.up.
                         comb_parent_bipart_bitarr = ~nodetobitMap[node.up] + nodetobitMap[node]
                         # Update clade_double_bipart_dict (Orientation 2/6) adding wts * Pr(root @ or below sister node | T^u)
                         clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][children_bipart_bitarr.to01()] += cum_node_wts
@@ -504,24 +505,20 @@ class SBN:
                         for sister in node.get_sisters():
                             cum_node_wts = wts * cum_root_prob[self._minor_bitarr(nodetobitMap[sister] ^ (~nodetobitMap[node])).to01()]
                             # Orientation 2/6
-                            # If root subsplit is linked via a sister, this
-                            # well-defines the parent subsplit at node.up.
+                            # If root subsplit is linked via a sister, this well-defines the parent subsplit at node.up.
                             comb_parent_bipart_bitarr = nodetobitMap[sister] + nodetobitMap[node]
                             # Update clade_double_bipart_dict (Orientation 2/6 again) adding wts * Pr(root @ or below sister node | T^u)
                             clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][children_bipart_bitarr.to01()] += cum_node_wts
 
                     # Orientation 3/6
-                    # If root subsplit is on the edge between node and
-                    # node.up, this well-defines the root split.
+                    # If root subsplit is on the edge between node and node.up, this well-defines the root split.
                     comb_parent_bipart_bitarr = ~nodetobitMap[node] + nodetobitMap[node]
                     # Update clade_double_bipart_dict (Orientation 3/6) adding wts * Pr(root @ node | T^u)
                     clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][children_bipart_bitarr.to01()] += node_wts
 
                 # Orientation 2/2
-                # Root node is 'below' node, so node's subsplit
-                # splits its 'sister' and/or 'parent' clades.
-                # NB: tree topology is unrooted, but is stored in a
-                # rooted tree format (with a trifurcating root).
+                # Root node is 'below' node, so node's subsplit splits its 'sister' and/or 'parent' clades.
+                # NB: tree topology is unrooted, but is stored in a rooted tree format (with a trifurcating root).
                 if not node.up.is_root():
                     children_bipart_bitarr = min([nodetobitMap[sister] for sister in node.get_sisters()] + [~nodetobitMap[node.up]])
                 else:
@@ -534,15 +531,13 @@ class SBN:
                     for child in node.children:
                         cum_node_wts = wts * cum_root_prob[self._minor_bitarr(nodetobitMap[node] ^ nodetobitMap[child]).to01()]
                         # Orientations 4/6 and 5/6
-                        # If root subsplit is beyond node's children, this
-                        # well-defines the parent subsplit at node.
+                        # If root subsplit is beyond node's children, this well-defines the parent subsplit at node.
                         comb_parent_bipart_bitarr = nodetobitMap[child] + ~nodetobitMap[node]
                         # Update clade_double_bipart_dict (Orientations 4/6 and 5/6) adding wts * Pr(root @ or below child node | T^u)
                         clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][children_bipart_bitarr.to01()] += cum_node_wts
 
                 # Orientation 6/6
-                # If root subsplit is on the edge between node.up and
-                # node, this well-defines the root split.
+                # If root subsplit is on the edge between node.up and node, this well-defines the root split.
                 comb_parent_bipart_bitarr = nodetobitMap[node] + ~nodetobitMap[node]
                 # Update clade_double_bipart_dict (Orientation 6/6) adding wts * Pr(root @ node | T^u)
                 clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][children_bipart_bitarr.to01()] += node_wts
@@ -674,7 +669,7 @@ class SBN:
 
         :return: tuple containing a dictionary of root split
         probabilities and a dictionary of dictionaries containing clade
-        split probabilities.
+        subsplit probabilities.
         """
         return deepcopy(self.clade_dict), deepcopy(self.clade_bipart_dict)
 
@@ -683,7 +678,7 @@ class SBN:
 
         :param clade_dict: dictionary of root split probabilities.
         :param clade_bipart_dict: dictionary of dictionaries
-        containing clade split probabilities.
+        containing clade subsplit probabilities.
         :param clade_double_bipart_dict: dictionary of dictionaries
         containing subsplit probabilities (technically joint parent
         split, child split probabilities).
@@ -801,11 +796,13 @@ class SBN:
         the joint Pr(root @ node, T^u)
         """
 
-        # cbn_est_up[node] contains the probability of the node split and all descendant splits,
-        # given the node's parent split.
+        # cbn_est_up[node] contains the probability of the node subsplit and all descendant subsplits,
+        # given the node's parent subsplit.
         cbn_est_up = {node: 1.0 for node in tree.traverse('postorder') if not node.is_root()}
 
-        # Up[node] contains the probability all descendant splits, given the node split.
+        # Up[node] contains the probability of all descendant subsplits, given the node subsplit.
+        # Calling this Up is motivated by the message-passing algorithm, such that Up is the aggregation of all of the
+        # messages going up the tree.
         Up = {node: 1.0 for node in tree.traverse('postorder') if not node.is_root()}
 
         nodetobitMap = {node: self.clade_to_bitarr(node.get_leaf_names()) for node in tree.traverse('postorder') if not node.is_root()}
@@ -815,8 +812,7 @@ class SBN:
         bipart_bitarr_prob = {}
 
         # Upward (leaf-to-root) pass
-        # Tree likelihood should be available at the end of this pass.
-        # cbn_est_up and Up are filled out.
+        # Tree likelihood should be available at the end of this pass, and cbn_est_up and Up will be filled out.
         for node in tree.traverse('postorder'):
             if not node.is_leaf() and not node.is_root():
                 # Collecting the child conditional probabilities.
@@ -827,12 +823,15 @@ class SBN:
                 bipart_bitarr = min(nodetobitMap[child] for child in node.children)
                 bipart_bitarr_up[node] = bipart_bitarr
                 if not node.up.is_root():
-                    # cbn_est_up[node] is a product of Up[node] and the conditional probability of the node split,
-                    # given the parent split.
+                    # cbn_est_up[node] is a product of Up[node] and the conditional probability of the node split, given
+                    # the parent split.
+                    # %EM Couldn't this be an = rather than *=?
                     cbn_est_up[node] *= Up[node]
                     parent_bipart_bitarr = min([nodetobitMap[node.get_sisters()[0]], nodetobitMap[node]])
                     comb_parent_bipart_bitarr = nodetobitMap[node.get_sisters()[0]] + nodetobitMap[node]
 
+                    # normalizing_const holds the probability of the parent subsplit, and so by dividing by it turns the
+                    # joint probability of parent and child into child conditional on parent.
                     normalizing_const = self.clade_bipart_dict[nodetobitMap[node.up].to01()][parent_bipart_bitarr.to01()]
                     normalizing_const_est = self.clade_bipart_freq_est[nodetobitMap[node.up].to01()][parent_bipart_bitarr.to01()]
                     if (normalizing_const + MAP * self.alpha * normalizing_const_est
@@ -846,8 +845,8 @@ class SBN:
                                              ) / (normalizing_const + MAP * self.alpha * normalizing_const_est)
 
         # Downward (root-to-leaf) pass
-        # cbn_est_down[node] contains the conditional probability of all splits above the parent split,
-        # given the parent split.
+        # cbn_est_down[node] contains the conditional probability of all splits above the parent split, given the parent
+        # split.
         cbn_est_down = {node: 1.0 for node in tree.traverse('preorder') if not node.is_root()}
         bipart_bitarr_down = {}
         for node in tree.traverse('preorder'):
@@ -864,7 +863,7 @@ class SBN:
                     else:
                         for sister in node.get_sisters():
                             if not sister.is_leaf():
-                                # For each sister node, cbn_est_down[node] factors in Up[sister]:
+                                # For each sister node, cbn_est_down[node] factors in the contribution from Up[sister]:
                                 # the probability of all sister-descendant splits, given the sister split.
                                 cbn_est_down[node] *= Up[sister]
                                 bipart_bitarr = min(nodetobitMap[child] for child in sister.children)
@@ -882,13 +881,14 @@ class SBN:
                     parent_bipart_bitarr = min([nodetobitMap[sister], ~nodetobitMap[node.up]])
                     bipart_bitarr_down[node] = parent_bipart_bitarr
 
+                    # %EM I'd like to know how these differ.
                     normalizing_const = self.clade_bipart_dict[(~nodetobitMap[node]).to01()][parent_bipart_bitarr.to01()]
                     normalizing_const_est = self.clade_bipart_freq_est[(~nodetobitMap[node]).to01()][parent_bipart_bitarr.to01()]
 
                     if (normalizing_const + MAP * self.alpha * normalizing_const_est) == 0.0:
                         cbn_est_down[node] = 0.0
                     else:
-                        # cbn_est_down[node] factors in cbn_est_down[node.up]:
+                        # cbn_est_down[node] factors in the contribution from cbn_est_down[node.up]:
                         # the conditional probability of all splits above the parent's parent split,
                         # given the parent's parent split.
                         cbn_est_down[node] *= cbn_est_down[node.up]
