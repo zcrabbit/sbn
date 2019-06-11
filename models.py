@@ -828,10 +828,6 @@ class SBN:
                 bipart_bitarr = min(nodetobitMap[child] for child in node.children)
                 bipart_bitarr_up[node] = bipart_bitarr
                 if not node.up.is_root():
-                    #%EM I suspect that every instance in the rest of this function of "split" should be "subsplit" but I wasn't bold enough to change it.
-                    # %MK I made some draft changes, converting "split" -> "subsplit" in most cases. There was one case
-                    #     where I believe it should remain "split" because it is specifically a root split. I didn't
-                    #     catch any others.
                     # cbn_est_up[node] is a product of Up[node] and the conditional probability of the node subsplit,
                     # given the parent subsplit.
                     # %EM Couldn't this be an = rather than *=?
