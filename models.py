@@ -302,6 +302,10 @@ class SBN:
                     bipart_bitarr = min([nodetobitMap[sister] for sister in node.get_sisters()] + [~nodetobitMap[node.up]])
                 else:
                     # %EM There can only be one sister, right? And it's A in the diagram?
+                    # %MK This is the `if node.up.is_root():` case, so node.up is the data structure root and
+                    #     represents a trifurcation, so there will be two sisters in this case. The diagram has node.up
+                    #     not being the data structure root. In the diagram, this case would be activated by the
+                    #     rightmost branch of the data structure root, and its sisters would be B and C.
                     bipart_bitarr = min([nodetobitMap[sister] for sister in node.get_sisters()])
                 if not node.is_leaf():
                     # Orientations 4 and 5
@@ -825,9 +829,13 @@ class SBN:
                 bipart_bitarr_up[node] = bipart_bitarr
                 if not node.up.is_root():
                     #%EM I suspect that every instance in the rest of this function of "split" should be "subsplit" but I wasn't bold enough to change it.
-                    # cbn_est_up[node] is a product of Up[node] and the conditional probability of the node split, given
-                    # the parent split.
+                    # %MK I made some draft changes, converting "split" -> "subsplit" in most cases. There was one case
+                    #     where I believe it should remain "split" because it is specifically a root split. I didn't
+                    #     catch any others.
+                    # cbn_est_up[node] is a product of Up[node] and the conditional probability of the node subsplit,
+                    # given the parent subsplit.
                     # %EM Couldn't this be an = rather than *=?
+                    # %MK It could be, yes.
                     cbn_est_up[node] *= Up[node]
                     parent_bipart_bitarr = min([nodetobitMap[node.get_sisters()[0]], nodetobitMap[node]])
                     comb_parent_bipart_bitarr = nodetobitMap[node.get_sisters()[0]] + nodetobitMap[node]
@@ -841,14 +849,14 @@ class SBN:
                         cbn_est_up[node] = 0.0
                     else:
                         # Here cbn_est_up[node] is complete, multiplying by the conditional probability
-                        # of the node split, given the parent split.
+                        # of the node subsplit, given the parent subsplit.
                         cbn_est_up[node] *= (self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] +
                                              MAP * self.alpha * normalizing_const_est / self.clade_double_bipart_len[comb_parent_bipart_bitarr.to01()]
                                              ) / (normalizing_const + MAP * self.alpha * normalizing_const_est)
 
         # Downward (root-to-leaf) pass
-        # cbn_est_down[node] contains the conditional probability of all splits above the parent split, given the parent
-        # split.
+        # cbn_est_down[node] contains the conditional probability of all subsplits above the parent, given the parent
+        # subsplit.
         cbn_est_down = {node: 1.0 for node in tree.traverse('preorder') if not node.is_root()}
         bipart_bitarr_down = {}
         for node in tree.traverse('preorder'):
@@ -866,12 +874,13 @@ class SBN:
                         for sister in node.get_sisters():
                             if not sister.is_leaf():
                                 # For each sister node, cbn_est_down[node] factors in the contribution from Up[sister]:
-                                # the probability of all sister-descendant splits, given the sister split.
+                                # the probability of all sister-descendant subsplits, given the sister subsplit.
                                 cbn_est_down[node] *= Up[sister]
                                 bipart_bitarr = min(nodetobitMap[child] for child in sister.children)
                                 comb_parent_bipart_bitarr = ((~nodetobitMap[node]) ^ nodetobitMap[sister]) + nodetobitMap[sister]
                                 if self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] > 0.0:
-                                    # Multiply by the conditional probability of the node split, given the parent split.
+                                    # Multiply by the conditional probability of the node subsplit, given the parent
+                                    # subsplit.
                                     cbn_est_down[node] *= (
                                         self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] +
                                         MAP * self.alpha * normalizing_const_est / self.clade_double_bipart_len[comb_parent_bipart_bitarr.to01()]) / (
@@ -890,12 +899,12 @@ class SBN:
                         cbn_est_down[node] = 0.0
                     else:
                         # cbn_est_down[node] factors in the contribution from cbn_est_down[node.up]: the conditional
-                        # probability of all splits above the parent's parent split, given the parent's parent split.
+                        # probability of all subsplits above the parent's parent, given the parent's parent subsplit.
                         cbn_est_down[node] *= cbn_est_down[node.up]
                         comb_parent_bipart_bitarr = nodetobitMap[sister] + ~nodetobitMap[node.up]
                         if self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr_down[node.up].to01()] > 0.0:
-                            # Multiply by the conditional probability of the parent's parent split, given the parent
-                            # split.
+                            # Multiply by the conditional probability of the parent's parent subsplit, given the parent
+                            # subsplit.
                             cbn_est_down[node] *= (
                                 self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr_down[node.up].to01()] +
                                 MAP * self.alpha * normalizing_const_est / self.clade_double_bipart_len[comb_parent_bipart_bitarr.to01()]) / (
@@ -904,12 +913,12 @@ class SBN:
                             cbn_est_down[node] = 0.0
 
                         if not sister.is_leaf():
-                            # Multiply by the probability of all sister-descendant splits, given the sister split.
+                            # Multiply by the probability of all sister-descendant subsplits, given the sister subsplit.
                             cbn_est_down[node] *= Up[sister]
                             comb_parent_bipart_bitarr = ~nodetobitMap[node.up] + nodetobitMap[sister]
                             if self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr_up[sister].to01()] > 0.0:
-                                # Multiply by by the conditional probability of the sister split,
-                                # given the parent split.
+                                # Multiply by by the conditional probability of the sister subsplit,
+                                # given the parent subsplit.
                                 cbn_est_down[node] *= (self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr_up[sister].to01(
                                 )] + MAP * self.alpha * normalizing_const_est / self.clade_double_bipart_len[comb_parent_bipart_bitarr.to01()]) / (
                                     normalizing_const + MAP * self.alpha * normalizing_const_est)
@@ -919,7 +928,7 @@ class SBN:
                 parent_bipart_bitarr = self._minor_bitarr(nodetobitMap[node])
                 normalizing_const = self.clade_dict[parent_bipart_bitarr.to01()]
                 normalizing_const_est = self.clade_freq_est[parent_bipart_bitarr.to01()]
-                # bipart_bitarr_prob[node] (abuse of notation) factors in the probability of the node-parent split
+                # bipart_bitarr_prob[node] (abuse of notation) factors in the probability of the node-vs-parent split
                 # as a root split.
                 bipart_bitarr_prob[parent_bipart_bitarr.to01()] = (
                     self.clade_dict[parent_bipart_bitarr.to01()] + MAP * self.alpha * normalizing_const_est) / (1.0 + MAP * self.alpha)
@@ -928,11 +937,11 @@ class SBN:
                     bipart_bitarr_prob[parent_bipart_bitarr.to01()] = 0.0
                 else:
                     if not node.is_leaf():
-                        # Multiply by the probability of all descendant splits, given the node split.
+                        # Multiply by the probability of all descendant subsplits, given the node subsplit.
                         bipart_bitarr_prob[parent_bipart_bitarr.to01()] *= Up[node]
                         comb_parent_bipart_bitarr = ~nodetobitMap[node] + nodetobitMap[node]
                         if self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr_up[node].to01()] > 0.0:
-                            # Multiply by the probability of the node split given the rooting.
+                            # Multiply by the probability of the node subsplit given the rooting.
                             bipart_bitarr_prob[parent_bipart_bitarr.to01()] *= (
                                 self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr_up[node].to01()] +
                                 MAP * self.alpha * normalizing_const_est / self.clade_double_bipart_len[comb_parent_bipart_bitarr.to01()]) / (
@@ -940,12 +949,12 @@ class SBN:
                         else:
                             bipart_bitarr_prob[parent_bipart_bitarr.to01()] = 0.0
 
-                    # Multiply by the conditional probability of all splits above the parent split,
-                    # given the parent split.
+                    # Multiply by the conditional probability of all subsplits above the parent,
+                    # given the parent subsplit.
                     bipart_bitarr_prob[parent_bipart_bitarr.to01()] *= cbn_est_down[node]
                     comb_parent_bipart_bitarr = nodetobitMap[node] + ~nodetobitMap[node]
                     if self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr_down[node].to01()] > 0.0:
-                        # Multiply by the probability of the parent split given the rooting.
+                        # Multiply by the probability of the parent subsplit given the rooting.
                         bipart_bitarr_prob[parent_bipart_bitarr.to01()] *= (
                             self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr_down[node].to01()] +
                             MAP * self.alpha * normalizing_const_est / self.clade_double_bipart_len[comb_parent_bipart_bitarr.to01()]) / (
