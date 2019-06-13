@@ -301,11 +301,6 @@ class SBN:
                 if not node.up.is_root():
                     bipart_bitarr = min([nodetobitMap[sister] for sister in node.get_sisters()] + [~nodetobitMap[node.up]])
                 else:
-                    # %EM There can only be one sister, right? And it's A in the diagram?
-                    # %MK This is the `if node.up.is_root():` case, so node.up is the data structure root and
-                    #     represents a trifurcation, so there will be two sisters in this case. The diagram has node.up
-                    #     not being the data structure root. In the diagram, this case would be activated by the
-                    #     rightmost branch of the data structure root, and its sisters would be B and C.
                     bipart_bitarr = min([nodetobitMap[sister] for sister in node.get_sisters()])
                 if not node.is_leaf():
                     # Orientations 4 and 5
