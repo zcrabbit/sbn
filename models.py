@@ -1,14 +1,6 @@
 """
 For theory and comments, see "Generalizing Tree Probability Estimation via Bayesian Networks", Zhang & Matsen
 
-
-Discussion:
-Shall we come up with a name parent-child subsplit pair probabilities? Just use "BN probabilities"?
-%MK For the conditional probabilities, (child subsplit | parent subsplit) I think we brainstormed "conditional subsplit distributions".
-    For the content of clade_double_bipart_dict[.][.] which is joint (child subsplit, parent subsplit) but doesn't sum to 1.0, I don't have a candidate yet.
-
-%EM Let's use "virtual root".
-
 Notes:
 * Assume the standard total order on bitarrays.
 * Addition on bitarrays is concatenation.
@@ -55,7 +47,8 @@ class SBN:
         self.clade_bipart_dict = defaultdict(lambda: defaultdict(float))
 
         # Dictionary mostly containing joint parent subsplit-child subsplit data
-        # Used to calculate Pr(child subsplit | parent subsplit) = CSD probs.
+        # Used to calculate Pr(child subsplit | parent subsplit) = conditional
+        # subsplit distribution (CSD) probs.
         # This is also a double dictionary, such that clade_double_bipart_dict[s][y]
         # where s is a composite bitarray representing the parent subsplit, and
         # y splits the second component of the parent subsplit.
@@ -157,9 +150,8 @@ class SBN:
                                                      self.clade_dict[bipart_bitarr.to01()])
 
     def logprior(self):
-        """Calculate the Dirichlet conjugate prior.
-        %EM It's not immediately clear to me what the prior is evaluated on...
-        %MK I think this one goes in the "Ask Cheng" list.
+        """Calculate the Dirichlet conjugate prior, namely the two summation
+        terms in the equation directly after Theorem 1 of the paper.
 
         :return: float containing the value of the prior.
         """
@@ -210,7 +202,7 @@ class SBN:
         Updates the CCD dictionary, based on a single unrooted tree topology,
         weighted by the fraction of times that tree appears in the sample or
         distribution. This function does the updating for all rootings of the
-        unrooted tree simultaneously.
+        unrooted tree simultaneously. We will call these "virtual roots."
 
         :param tree: Tree (ete3) unrooted tree object providing the topology.
         :param wts: float representing the fraction of the sampled trees that
@@ -226,13 +218,13 @@ class SBN:
             # Notation: Node and the edge 'above' it are equivalent.
             if not node.is_root():
                 # Orientation 1
-                # Root node is 'above' node, so node's subsplit splits its 'child' clades.
+                # Virtual root node is 'above' node, so node's subsplit splits its 'child' clades.
                 if not node.is_leaf():
                     bipart_bitarr = min([nodetobitMap[child] for child in node.children])
                     self.clade_bipart_dict[nodetobitMap[node].to01()][bipart_bitarr.to01()] += wts / (2 * self.ntaxa - 3.0)
 
                 # Orientation 2
-                # Root node is 'below' node, so node's subsplit splits its 'sister' and/or 'parent' clades.
+                # Virtual root node is 'below' node, so node's subsplit splits its 'sister' and/or 'parent' clades.
                 if not node.up.is_root():
                     # This is the standard case for this orientation in the middle of the ETE tree. The first term is a
                     # singleton list (the single sister) and the second is the rest of the tree that is above node.up.
@@ -251,7 +243,9 @@ class SBN:
 
         Updates the CSD dictionary, based on a single tree topology,
         weighted by the number of times that tree appears in the
-        sample or distribution.
+        sample or distribution. This function does the updating for all
+        rootings of the unrooted tree simultaneously. We will call these
+        "virtual roots."
 
         :param tree: Tree (ete3) unrooted tree object providing the topology.
         :param wts: float representing the fraction of the sampled trees that
@@ -271,47 +265,48 @@ class SBN:
 
             # Below we update the conditional subsplit distribution (CSD) weights.
             # Explores the six orientations that this (node, node.up) pair can take, and updates the CSD dictionaries.
+            # See the `orientations` image in the `doc/` directory to see a figure depicting these orientations.
             # Notation: Node and the edge 'above' it are equivalent.
             if not node.is_root():
-                # Orientations 1,2,3: node is child subsplit, node.up is in the direction of the root subsplit.
+                # Orientations 1,2,3: node is child subsplit, node.up is in the direction of the virtual root.
                 if not node.is_leaf():
                     # Given nodetobitMap[node], this bitarray well-defines the subsplit at node.
                     bipart_bitarr = min([nodetobitMap[child] for child in node.children])
                     for sister in node.get_sisters():
                         # Orientation 1
-                        # If root subsplit is beyond node.up, this composite bitarray well-defines the parent subsplit
+                        # If virtual root is beyond node.up, this composite bitarray well-defines the parent subsplit
                         # at node.up.
                         comb_parent_bipart_bitarr = nodetobitMap[sister] + nodetobitMap[node]
                         self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] += node_wts
                     if not node.up.is_root():
                         # Orientation 2
-                        # If root subsplit is linked via a sister, this composite bitarray well-defines the parent
+                        # If virtual root is linked via a sister, this composite bitarray well-defines the parent
                         # subsplit at node.up.
                         comb_parent_bipart_bitarr = ~nodetobitMap[node.up] + nodetobitMap[node]
                         self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] += node_wts
 
                     # Orientation 3
-                    # If root subsplit is on the edge between node and node.up, this composite bitarray well-defines the
+                    # If virtual root is on the edge between node and node.up, this composite bitarray well-defines the
                     # root split.
                     comb_parent_bipart_bitarr = ~nodetobitMap[node] + nodetobitMap[node]
                     self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] += node_wts
 
-                # Orientations 4,5,6: node.up is child subsplit, node is in the direction of the root subsplit.
-                # With the root split "below" node, this bitarray well-defines the subsplit at node.up
+                # Orientations 4,5,6: node.up is child subsplit, node is in the direction of the virtual root.
+                # With the root split "below" node, this bitarray well-defines the subsplit at node.up.
                 if not node.up.is_root():
                     bipart_bitarr = min([nodetobitMap[sister] for sister in node.get_sisters()] + [~nodetobitMap[node.up]])
                 else:
                     bipart_bitarr = min([nodetobitMap[sister] for sister in node.get_sisters()])
                 if not node.is_leaf():
                     # Orientations 4 and 5
-                    # If root subsplit is beyond node's children, this composite bitarray well-defines the parent
+                    # If virtual root is beyond node's children, this composite bitarray well-defines the parent
                     # subsplit at node.
                     for child in node.children:
                         comb_parent_bipart_bitarr = nodetobitMap[child] + ~nodetobitMap[node]
                         self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] += node_wts
 
                 # Orientation 6
-                # If root subsplit is on the edge between node.up and node, this composite bitarray well-defines the
+                # If virtual root is on the edge between node.up and node, this composite bitarray well-defines the
                 # root split.
                 comb_parent_bipart_bitarr = nodetobitMap[node] + ~nodetobitMap[node]
                 self.clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][bipart_bitarr.to01()] += node_wts
@@ -495,15 +490,15 @@ class SBN:
                         parent_bipart_bitarr = self._minor_bitarr(nodetobitMap[node.up])
                         cum_node_wts = wts * (1.0 - cum_root_prob[parent_bipart_bitarr.to01()] + root_prob[parent_bipart_bitarr.to01()])
                         # Orientation 1/6
-                        # If root subsplit is beyond node.up, this
-                        # well-defines the parent subsplit at node.up.
+                        # See the `orientations` image in the `doc/` directory to see a figure depicting these orientations.
+                        # If virtual root is beyond node.up, this well-defines the parent subsplit at node.up.
                         comb_parent_bipart_bitarr = nodetobitMap[node.get_sisters()[0]] + nodetobitMap[node]
                         # Update clade_double_bipart_dict (Orientation 1/6) adding wts * Pr(root @ or above parent node | T^u)
                         clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][children_bipart_bitarr.to01()] += cum_node_wts
 
                         cum_node_wts = wts * cum_root_prob[self._minor_bitarr(nodetobitMap[node.get_sisters()[0]]).to01()]
                         # Orientation 2/6
-                        # If root subsplit is linked via a sister, this well-defines the parent subsplit at node.up.
+                        # If virtual root is linked via a sister, this well-defines the parent subsplit at node.up.
                         comb_parent_bipart_bitarr = ~nodetobitMap[node.up] + nodetobitMap[node]
                         # Update clade_double_bipart_dict (Orientation 2/6) adding wts * Pr(root @ or below sister node | T^u)
                         clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][children_bipart_bitarr.to01()] += cum_node_wts
@@ -512,13 +507,13 @@ class SBN:
                             # Here ^ is bitwise XOR.
                             cum_node_wts = wts * cum_root_prob[self._minor_bitarr(nodetobitMap[sister] ^ (~nodetobitMap[node])).to01()]
                             # Orientation 2/6
-                            # If root subsplit is linked via a sister, this well-defines the parent subsplit at node.up.
+                            # If virtual root is linked via a sister, this well-defines the parent subsplit at node.up.
                             comb_parent_bipart_bitarr = nodetobitMap[sister] + nodetobitMap[node]
                             # Update clade_double_bipart_dict (Orientation 2/6 again) adding wts * Pr(root @ or below sister node | T^u)
                             clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][children_bipart_bitarr.to01()] += cum_node_wts
 
                     # Orientation 3/6
-                    # If root subsplit is on the edge between node and node.up, this well-defines the root split.
+                    # If virtual root is on the edge between node and node.up, this well-defines the root split.
                     comb_parent_bipart_bitarr = ~nodetobitMap[node] + nodetobitMap[node]
                     # Update clade_double_bipart_dict (Orientation 3/6) adding wts * Pr(root @ node | T^u)
                     clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][children_bipart_bitarr.to01()] += node_wts
@@ -538,13 +533,13 @@ class SBN:
                     for child in node.children:
                         cum_node_wts = wts * cum_root_prob[self._minor_bitarr(nodetobitMap[node] ^ nodetobitMap[child]).to01()]
                         # Orientations 4/6 and 5/6
-                        # If root subsplit is beyond node's children, this well-defines the parent subsplit at node.
+                        # If virtual root is beyond node's children, this well-defines the parent subsplit at node.
                         comb_parent_bipart_bitarr = nodetobitMap[child] + ~nodetobitMap[node]
                         # Update clade_double_bipart_dict (Orientations 4/6 and 5/6) adding wts * Pr(root @ or below child node | T^u)
                         clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][children_bipart_bitarr.to01()] += cum_node_wts
 
                 # Orientation 6/6
-                # If root subsplit is on the edge between node.up and node, this well-defines the root split.
+                # If virtual root is on the edge between node.up and node, this well-defines the root split.
                 comb_parent_bipart_bitarr = nodetobitMap[node] + ~nodetobitMap[node]
                 # Update clade_double_bipart_dict (Orientation 6/6) adding wts * Pr(root @ node | T^u)
                 clade_double_bipart_dict[comb_parent_bipart_bitarr.to01()][children_bipart_bitarr.to01()] += node_wts
@@ -584,8 +579,6 @@ class SBN:
                 wts = tree_wts[i]
                 # E-step
                 bipart_bitarr_prob = self._bn_estimate_fast(tree, MAP)
-                # %EM I don't follow the following comment-- we're committing the actual results of the EM algorithm.
-                # %MK These are Cheng-original comments, so I left them in place.
                 # Update the weighted frequency counts.
                 est_prob = self.bn_dict_em_update(tree, wts, bipart_bitarr_prob, clade_dict, clade_bipart_dict, clade_double_bipart_dict)
                 curr_logp += wts * np.log(est_prob)
@@ -659,12 +652,7 @@ class SBN:
     def get_clade_bipart(self):
         """Gets a copy of clade dictionaries.
 
-        %MK: This is not symmetric with set_clade_bipart, possibly typo or not updated?
-        %EM Do we have a way of flagging things to ask Cheng? This should make the list!
-        %MK I am having trouble finding an equivalent function in VBPI,
-        and I did not see this function used at all in the `experiments` notebooks,
-        so I think it may have been resolved (through excision) between SBN->VBPI.
-        $MK "Ask Cheng" candidate.
+        This is not symmetric with set_clade_bipart.
 
         :return: tuple containing a dictionary of root split
         probabilities and a dictionary of dictionaries containing clade
@@ -685,7 +673,6 @@ class SBN:
         self.clade_dict, self.clade_bipart_dict, self.clade_double_bipart_dict = deepcopy(clade_dict), deepcopy(clade_bipart_dict), deepcopy(
             clade_double_bipart_dict)
 
-    # %MK VBPI appears to switch to log-addition rather than linear-multiplication
     def ccd_estimate(self, tree, unrooted=True):
         """Calculate tree (rooted or unrooted) likelihood using clade conditional distibutions.
 
@@ -731,7 +718,6 @@ class SBN:
 
         return (2 * self.ntaxa - 3.0) * ccd_est
 
-    # %MK VBPI appears to switch to log-addition rather than linear-multiplication
     def bn_estimate_rooted(self, tree, MAP=False):
         """Calculate rooted tree likelihood using subsplit distributions.
 
@@ -783,8 +769,6 @@ class SBN:
 
         return bn_est
 
-    # %MK VBPI appears to switch to log-addition rather than linear-multiplication
-    # Regularization linear-addition might present an obstacle
     def _bn_estimate_fast(self, tree, MAP=False):
         """Two-pass algorithm for calculating rooted SBN likelihoods for all
         rootings of a given unrooted tree.
@@ -826,7 +810,6 @@ class SBN:
                     # cbn_est_up[node] is a product of Up[node] and the conditional probability of the node subsplit,
                     # given the parent subsplit.
                     # %EM Couldn't this be an = rather than *=?
-                    # %MK It could be, yes.
                     cbn_est_up[node] *= Up[node]
                     parent_bipart_bitarr = min([nodetobitMap[node.get_sisters()[0]], nodetobitMap[node]])
                     comb_parent_bipart_bitarr = nodetobitMap[node.get_sisters()[0]] + nodetobitMap[node]
